@@ -23,8 +23,9 @@ export const AMBER_BAND = 0.10;
 /* ✏️ 여기 2-b — 조종간(Strategy) 레버의 움직임 범위. 전부 가상값 — 실제 관행으로 교체.
    가정 금리·만기는 여기 두지 않는다(RULE.creditRate / RULE.creditYears가 유일한 출처). */
 export const LEVER = {
-  creditPills: [0, 1000, 3000, 5000, 10000, 15000],   // 신용대출 잔액 '대충' 선택지(만원)
-  otherPills: [0, 20, 50, 100, 150],                  // 기타 대출 월상환액 '대충' 선택지(만원)
+  /* 부채는 '잔액' 하나만 받는다. 두 잣대 모두 잔액에서 출발하기 때문 —
+     디딤돌 DTI는 잔액 × 추정금리(이자만), 은행 DSR은 잔액을 원리금으로 환산. 월상환액은 안 묻는다. */
+  debtPills: [0, 1000, 3000, 5000, 10000, 20000],     // 대출 잔액 합계 '대충' 선택지(만원). 마지막 칸은 '이상'
   incomeHeadroom: 4000,                               // 소득 레버가 위로 열리는 폭(만원). 상품 소득상한에서 잘린다
   incomeStep: 100,
 };
@@ -34,8 +35,10 @@ export const LEVER = {
    ⚠️ 자격 상한(소득·가격·면적·한도)은 여기 두지 말 것 — src/products/* 의 규칙 데이터가 유일한 출처다. */
 export const PRODUCTS = {
   didimdol: {
-    key: "didimdol", name: "디딤돌대출", rateLabel: "연 2~3%대",
-    calcRate: 0.030, ratio: 0.60, LTV: 0.70, offsetsRoomDeduction: false, cap: 25000, leadTime: "약 2개월",
+    /* capacityModel: "fundDTI" = 상환한도를 은행 DSR식이 아니라 디딤돌 DTI식으로 계산한다
+       (engine.didimdolDtiLimit). 그래서 이 상품엔 ratio(DSR비율)가 없다 — DTI상한은 DIDIMDOL_DTI.cap. */
+    key: "didimdol", name: "디딤돌대출", rateLabel: "연 2~3%대", capacityModel: "fundDTI",
+    calcRate: 0.030, LTV: 0.70, offsetsRoomDeduction: false, cap: 25000, leadTime: "약 2개월",
     guide: {
       prepare: ["소득 증빙(원천징수/소득금액증명)", "무주택 확인(세대 전원 등본·전입세대열람)", "혼인·가족관계증명(해당 시)"],
       ask: ["제 소득으로 디딤돌 대상이 되나요?", "이 단지 전용면적·매매가가 요건 안에 드나요?"],
@@ -51,6 +54,28 @@ export const PRODUCTS = {
       fallback: ["가격 상한을 살짝 넘으면 일반 은행 주담대와 한도를 비교해달라고 하세요."],
     },
   },
+};
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ✏️ 여기 3-a — 디딤돌 DTI 산정 파라미터  (은행 DSR과 식이 다르다)
+
+   디딤돌은 DSR이 아니라 DTI로 상환한도를 본다:
+     DTI(%) = ( ① 디딤돌 대출 자체의 연간 원리금상환액 + ② 기타부채 × 추정금리 ) / 연소득 × 100
+     ① 원리금균등, 만기는 30년으로 강제(years)
+     ② 기존 부채는 원금 상환 스케줄을 보지 않는다 — 잔액에 추정금리를 곱한 '이자만'
+   계산식은 engine.didimdolDtiLimit 하나에만 있다. 은행 DSR(engine.repaymentCapacity)과 섞지 말 것.
+
+   ⚠️⚠️⚠️ ESTIMATED_DEBT_RATE (= 추정금리_현재값) 는 갱신이 필요한 값이다 ⚠️⚠️⚠️
+   정의: 한국은행 고시 「예금은행 가중평균 가계대출금리(잔액기준)」 + 1.00%p
+   이 고시값은 매달 바뀐다. 지금 값은 3.0% 가정치이므로 실제 고시값으로 교체할 것.
+   갱신 방법: 아래 숫자 하나만 고치면 디딤돌 DTI 계산 전체에 반영된다(다른 곳에 복제하지 말 것).
+   확인처: 한국은행 경제통계시스템(ECOS) 예금은행 가중평균금리 — 가계대출 잔액기준.
+   ══════════════════════════════════════════════════════════════════════════ */
+export const ESTIMATED_DEBT_RATE = 0.030;   // 한국은행 고시 + 1%p → 주기적 갱신 필요 (지금은 3.0% 가정)
+
+export const DIDIMDOL_DTI = {
+  cap: 0.60,    //  — DTI상한은 60%
+  years: 30,    // 디딤돌 자체 원리금은 만기 30년으로 강제해서 계산한다.
 };
 
 /* ✏️ 여기 3-b — 배우자 세전 연소득 밴드 (전부 가상 숫자! 실제 기금 소득상한에 맞춰 끊을 것)

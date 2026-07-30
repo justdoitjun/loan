@@ -1,6 +1,7 @@
 /* 공유 껍데기: 스타일 토큰 + 레이아웃 컴포넌트.
    상품/페이지가 다르다고 여기서 분기하지 말 것(if productKey === ... 금지).
    상품 차이는 src/products/* 와 data.js에만 둔다. */
+import { useEffect, useRef, useState } from "react";
 import { C } from "./data.js";
 import { won } from "./engine.js";
 
@@ -66,6 +67,17 @@ export function Choice({ label, options, value, onPick }) {
   </div>;
 }
 
+/* Choice와 같은 리듬이되 선택지가 많아 줄바꿈되는 경우(신용대출 잔액 등). hint로 '대충 골라도 된다'를 말한다. */
+export function Pills({ label, hint, options, value, onPick }) {
+  return <div style={{ marginBottom: 14 }}>
+    <div style={{ fontSize: 13, color: C.inkSoft, fontWeight: 600, marginBottom: hint ? 3 : 7 }}>{label}</div>
+    {hint && <div style={{ fontSize: 12, color: "#9AA3A0", marginBottom: 7, lineHeight: 1.55 }}>{hint}</div>}
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      {options.map(([t, v]) => <button key={t} onClick={() => onPick(v)} style={{ ...pill(value === v), flex: "1 1 28%", whiteSpace: "nowrap" }}>{t}</button>)}
+    </div>
+  </div>;
+}
+
 export function Slider({ label, value, min, max, step, onChange, display }) {
   return <div style={{ marginBottom: 12 }}>
     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
@@ -117,6 +129,30 @@ export function Section({ title, subtitle, children, tone }) {
       <div style={{ marginTop: 10 }}>{children}</div>
     </div>
   );
+}
+
+/* ── 훅 ──
+   숫자가 뚝 바뀌지 않고 굴러가게 한다. 조종간에서 "내가 당기니 결과가 반응한다"는 감각이 여기서 나온다. */
+export function useTween(target, ms = 380) {
+  const [shown, setShown] = useState(target);
+  const from = useRef(target);
+  useEffect(() => {
+    const a = from.current, b = target;
+    if (a === b) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { from.current = b; setShown(b); return; }
+    let raf = 0;
+    const start = performance.now();
+    const step = (t) => {
+      const p = Math.min(1, (t - start) / ms);
+      const v = a + (b - a) * (1 - Math.pow(1 - p, 3));   // easeOutCubic
+      from.current = v;                                    // 중간에 다시 당기면 여기서 이어간다
+      setShown(v);
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, ms]);
+  return shown;
 }
 
 /* 아직 구현 전인 자리를 정직하게 표시한다. 빈 화면 대신 "무엇이 올지"를 보여준다. */

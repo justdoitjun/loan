@@ -14,7 +14,7 @@
 import { useState } from "react";
 import { PRODUCTS, LEVER, C } from "./data.js";
 import { deriveFacts, judgeAll, withAssumedIncome, incomeTrust, won, eok } from "./engine.js";
-import { limitAt, ceilingAt, creditLoanToReach, incomeToReach } from "./products/limit.js";
+import { limitAt, ceilingAt, debtToReach, incomeToReach } from "./products/limit.js";
 import { BackButton, ContextSummary, Section, Placeholder, Block, Stat, useTween, eyebrow, h1, card, fine } from "./ui.jsx";
 import DetailInfo, { detailReady, TrustBadge } from "./DetailInfo.jsx";
 
@@ -49,13 +49,11 @@ export default function Strategy({ ctx, pickedKey, onPickOther, detail, setDetai
 
   /* DetailInfo가 답한 값 = 레버의 시작 위치. 다시 답하면 당긴 건 초기화한다(기준이 바뀌었으니까). */
   const base = ready ? {
-    price: ctx.unit.price, income: ctx.totalIncome, incomeMax,
-    creditLoan: detail.debt.creditLoan, otherMonthly: detail.debt.otherMonthly,
+    price: ctx.unit.price, income: ctx.totalIncome, incomeMax, debt: detail.debt,
   } : null;
   const lever = base && {
     ...base,
-    creditLoan: clamp(pull?.creditLoan ?? base.creditLoan, 0, base.creditLoan),
-    otherMonthly: clamp(pull?.otherMonthly ?? base.otherMonthly, 0, base.otherMonthly),
+    debt: clamp(pull?.debt ?? base.debt, 0, base.debt),
     income: clamp(pull?.income ?? base.income, base.income, incomeMax),
   };
 
@@ -76,10 +74,10 @@ export default function Strategy({ ctx, pickedKey, onPickOther, detail, setDetai
       <DetailInfo value={detail} onChange={onDetail} />
 
       {!ready ? (
-        <Section title="② 레버" subtitle="위 네 칸을 채우면 레버가 나타나요.">
+        <Section title="② 레버" subtitle="위 세 칸을 채우면 레버가 나타나요.">
           <Placeholder>
             채우고 나면 <b>부채 레버</b>와 <b>소득 레버</b>가 열려요. 당기면 이 집까지의 거리가 실시간으로 좁혀지고,
-            어디까지 당겨야 닿는지를 <b>“신용대출 약 얼마 일부상환”</b> 같은 실제 행동으로 번역해 드려요.
+            어디까지 당겨야 닿는지를 <b>“기존 대출 약 얼마 일부상환”</b> 같은 실제 행동으로 번역해 드려요.
           </Placeholder>
         </Section>
       ) : (
@@ -104,6 +102,7 @@ function Cockpit({ ctx, passed, picked, onPickOther, lever, base, target, income
 
   /* ── 레버 → 모듈 → 결과 ── */
   const reach = limitAt(picked.product, lever, picked.limit);
+  // TODO: Ceiling을 
   const ceil = ceilingAt(picked.product, lever, picked.limit);
 
   const reached = reach.limit >= target;
@@ -117,8 +116,8 @@ function Cockpit({ ctx, passed, picked, onPickOther, lever, base, target, income
   const shownGap = useTween(gap);
 
   /* ── 행동 번역: 어디까지 당기면 닿는지를 역산해 실제 행동으로 옮긴다 ── */
-  const creditNeed = creditLoanToReach(picked.product, lever, picked.limit, target);
-  const repay = creditNeed === null ? null : Math.max(lever.creditLoan - creditNeed, 0);
+  const debtNeed = debtToReach(picked.product, lever, picked.limit, target);
+  const repay = debtNeed === null ? null : Math.max(lever.debt - debtNeed, 0);
   const incomeNeed = incomeToReach(picked.product, lever, picked.limit, target);
 
   /* ── 상품 순위 반응: 소득 레버는 자격까지 움직인다(소득상한). 그래서 매번 다시 판정한다. ── */
@@ -133,8 +132,7 @@ function Cockpit({ ctx, passed, picked, onPickOther, lever, base, target, income
   /* 미혼에게 "배우자 소득 합산"을 안내하면 안 된다 — 소득 레버의 설명과 창구 질문이 갈린다. */
   const hasSpouse = ctx.marital !== "single";
 
-  const debtSpent = base.creditLoan - lever.creditLoan;
-  const otherSpent = base.otherMonthly - lever.otherMonthly;
+  const debtSpent = base.debt - lever.debt;
   const incomeUp = lever.income - base.income;
 
   /* 레버로 여기서 더 열 수 있는 폭. 0이면 레버는 손잡이만 있고 결과가 안 움직인다
@@ -146,7 +144,7 @@ function Cockpit({ ctx, passed, picked, onPickOther, lever, base, target, income
   return (
     <>
       {/* ── ① 목표선 ── */}
-      <Section title="② 목표선 — 이 집까지의 거리" tone={tone}
+      <Section title="② 대출가능금액" tone={tone}
         subtitle={`${ctx.unit.name} 기준 필요 대출 약 ${won(target)}원. 이 선은 안 움직여요. 아래 레버가 움직여요.`}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 3 }}>
           <span style={{ fontSize: 32, fontWeight: 800, color: tone === "ok" ? C.greenDeep : C.amber, fontVariantNumeric: "tabular-nums" }}>약 {eok(shownReach)}</span>
@@ -158,9 +156,14 @@ function Cockpit({ ctx, passed, picked, onPickOther, lever, base, target, income
             : `이 집까지 앞으로 약 ${won(shownGap)}원`}
         </div>
 
-        <Gauge target={target} reach={reach.limit} ceiling={ceil.limit} reached={reached} tone={tone} />
+        <Gauge price={base.price} target={target} reach={reach.limit} ceiling={ceil.limit} reached={reached} tone={tone} />
 
         <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.line}` }}>
+          {/* <div key={p.key} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 0", color: on ? C.ink : C.inkSoft, fontWeight: on ? 800 : 500 }}>
+                <span>{p.label}{on && <span style={{ color: C.amber, marginLeft: 6, fontSize: 11 }}>← 지금 여기서 걸려요</span>}</span>
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>{won(p.value)}</span>
+          </div> */}
+          
           {reach.parts.map((p) => {
             const on = p.key === reach.binding.key;
             return (
@@ -189,11 +192,10 @@ function Cockpit({ ctx, passed, picked, onPickOther, lever, base, target, income
 
       {leversInert && (
         <div style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 16, padding: "11px 13px", borderRadius: 11, background: "#F1F3F1", border: `1px solid ${C.greyDot}`, color: C.inkSoft }}>
-          지금 벽은 <b style={{ color: C.ink }}>{{ ltv: "담보(LTV − 방공제)", dti: "상환능력(DTI)", cap: "이 경로의 최대한도" }[ceil.binding.key]}</b>({won(ceil.binding.value)})이에요.
-          이 벽은 <b style={{ color: C.ink }}>부채를 갚아도, 소득이 올라도 안 내려가요.</b> 그래서 아래 레버를 당겨도 위 숫자는 그대로예요 —
-          움직이는 척 보여드리지 않을게요. 대신 열려 있는 길은 <b style={{ color: C.ink }}>아래 ④·⑥</b>에 있어요
+           <b style={{ color: C.ink }}>{ceil.binding.label}</b>({won(ceil.binding.value)})이에요. <br/>
+           <b style={{ color: C.ink }}>부채를 갚아도, 소득이 올라도 이 금액이 최대에요.</b>
           {reached ? " (지금 이미 목표에 닿아 있으니 급하지 않아요)." : "(차액을 현금으로 채우는 길, 그리고 한도가 더 큰 다른 경로)."}
-          <br /><span style={{ fontSize: 12, color: "#9AA3A0" }}>레버를 당기면 상환능력(DTI) 칸은 실제로 움직여요 — 위 내역에서 확인할 수 있어요. 다만 그게 최종 한도를 정하는 벽이 아니에요.</span>
+          <br />
         </div>
       )}
 
@@ -204,26 +206,22 @@ function Cockpit({ ctx, passed, picked, onPickOther, lever, base, target, income
             label="기존 대출을 이만큼으로 가정하면"
             hint="왼쪽으로 밀면 '그만큼 갚았다고 가정'해요. 지금 갚으라는 뜻이 아니에요." />
 
-          {base.creditLoan > 0 ? (
-            <LeverRow label="신용대출 잔액" value={lever.creditLoan} max={base.creditLoan} step={100}
-              display={won(lever.creditLoan) + "원"} sub={debtSpent > 0 ? `원래 ${won(base.creditLoan)} → 약 ${won(debtSpent)} 상환 가정` : "아직 안 당김"}
-              hint={!pulled && !leversInert} onChange={(v) => pullLever("creditLoan", v)} />
+          {base.debt > 0 ? (
+            <LeverRow label="대출 잔액" value={lever.debt} max={base.debt} step={100}
+              display={won(lever.debt) + "원"} sub={debtSpent > 0 ? `원래 ${won(base.debt)} → 약 ${won(debtSpent)} 상환 가정` : "아직 안 당김"}
+              hint={!pulled && !leversInert} onChange={(v) => pullLever("debt", v)} />
           ) : (
             <div style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.6, marginBottom: 10 }}>
-              신용대출이 없다고 하셨으니 이 레버는 <b>이미 끝까지 당겨져 있어요</b>. 부채로는 더 열 여지가 없어요.
+              갖고 있는 대출이 없다고 하셨으니 이 레버는 <b>이미 끝까지 당겨져 있어요</b>. 부채로는 더 열 여지가 없어요.
             </div>
           )}
 
-          {base.otherMonthly > 0 ? (
-            <LeverRow label="기타 대출 월상환액" value={lever.otherMonthly} max={base.otherMonthly} step={5}
-              display={`월 ${lever.otherMonthly}만원`} sub={otherSpent > 0 ? `원래 월 ${base.otherMonthly}만 → 월 ${lever.otherMonthly}만 가정` : null}
-              hint={!pulled && !leversInert && base.creditLoan === 0} onChange={(v) => pullLever("otherMonthly", v)} />
-          ) : (
-            <div style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.6 }}>기타 대출은 없다고 하셨어요.</div>
-          )}
-
+          {/* 잣대에 따라 이 설명이 달라진다. 상품 데이터(capacityModel)를 읽어 고른다 — 문구를 지어내지 않기 위해. */}
           <div style={{ fontSize: 12, color: "#9AA3A0", lineHeight: 1.6, marginTop: 8 }}>
-            {P.name}은 기존 대출을 <b>이자 위주</b>로 봐요(가정 금리 기준 근사). 그래서 잔액을 줄이면 상환능력 칸이 그만큼 열려요.
+            {P.capacityModel === "fundDTI"
+              ? <>{P.name}은 DTI로 보기 때문에 기존 대출에서 <b>이자만</b> 잡혀요 — 잔액 × 추정금리가 상환능력에서 빠져요.
+                  그래서 <b>잔액을 줄이면</b> 그만큼 열려요(월 얼마씩 갚는지는 이 상품 계산에 안 들어가요).</>
+              : <>{P.name}은 기존 대출을 <b>원리금</b>으로 봐요(가정 금리·만기 기준 근사). 그래서 잔액을 줄이면 상환능력 칸이 그만큼 열려요.</>}
           </div>
         </div>
 
@@ -239,7 +237,7 @@ function Cockpit({ ctx, passed, picked, onPickOther, lever, base, target, income
           {incomeRoom >= LEVER.incomeStep ? (
             <LeverRow label={hasSpouse ? "가정 인정소득 (부부합산)" : "가정 인정소득"} value={lever.income} min={base.income} max={incomeMax} step={LEVER.incomeStep}
               display={won(lever.income) + "원"} sub={incomeUp > 0 ? `확정 ${won(base.income)} → 약 ${won(incomeUp)} 더 인정 가정` : "아직 안 당김"}
-              hint={!pulled && !leversInert && base.creditLoan === 0 && base.otherMonthly === 0} onChange={(v) => pullLever("income", v)} />
+              hint={!pulled && !leversInert && base.debt === 0} onChange={(v) => pullLever("income", v)} />
           ) : (
             <div style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.6, marginBottom: 10 }}>
               이 경로는 합산소득 <b>{won(incomeCap)}원</b>이 자격 상한이에요({picked.income.label}). 지금 소득이 이미 그 근처라 <b>소득 레버는 올릴 데가 없어요</b> —
@@ -263,7 +261,7 @@ function Cockpit({ ctx, passed, picked, onPickOther, lever, base, target, income
       <Translate
         reached={reached} trust={trust} gap={gap} overCeiling={overCeiling}
         lever={lever} base={base} hasSpouse={hasSpouse}
-        creditNeed={creditNeed} repay={repay} incomeNeed={incomeNeed} incomeCap={incomeCap}
+        debtNeed={debtNeed} repay={repay} incomeNeed={incomeNeed} incomeCap={incomeCap}
         productName={P.name} />
 
       {/* ── ③ 정직한 천장 ── */}
@@ -273,40 +271,52 @@ function Cockpit({ ctx, passed, picked, onPickOther, lever, base, target, income
       <Ranked ranked={ranked} closedByLever={closedByLever} better={better} picked={picked}
         lever={lever} target={target} reached={reached} reachLimit={reach.limit} onPickOther={onPickOther} />
 
-      <Block title="은행 가기 전 준비" items={P.guide.prepare} />
+      {/* <Block title="은행 가기 전 준비" items={P.guide.prepare} />
       <Block title="창구에서 이렇게 물어보세요" items={P.guide.ask} />
-      <Block title="애매할 때 대처" items={P.guide.fallback} />
+      <Block title="애매할 때 대처" items={P.guide.fallback} /> */}
     </>
   );
 }
 
-/* ── 게이지: 숫자가 툭 바뀌는 게 아니라 '거리가 좁혀지는' 게 보여야 한다 ── */
-function Gauge({ target, reach, ceiling, reached, tone }) {
-  const scale = Math.max(target, ceiling, 1) * 1.14;
+/* ── 게이지: 숫자가 툭 바뀌는 게 아니라 '거리가 좁혀지는' 게 보여야 한다.
+   축(0~100%) = 시세. "10억짜리 집 중 3억 대출 + 7억 현금" 처럼, 대출과 현금을
+   같은 막대 위에서 바로 비교하게 한다 — 목표 대출액이 아니라 집값이 Maximum. */
+function Gauge({ price, target, reach, ceiling, reached, tone }) {
+  const scale = Math.max(price, ceiling, target, 1);
   const pos = (v) => clamp(v / scale, 0, 1) * 100;
   const fill = reached ? (tone === "warn" ? C.amber : C.green) : C.green;
+  const cashNeeded = Math.max(price - reach, 0);
   return (
     <div>
+      {/* <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 12, color: C.inkSoft, marginBottom: 6 }}>
+        <span>시세 {won(price)}원 중</span>
+        <span>대출 <b style={{ color: C.ink }}>약 {won(reach)}원</b> + 현금 <b style={{ color: C.ink }}>약 {won(cashNeeded)}원</b></span>
+      </div> */}
       <div style={{ position: "relative", height: 16, fontSize: 11 }}>
         <span className="gauge-mark" style={{ position: "absolute", left: `${pos(target)}%`, transform: "translateX(-50%)", whiteSpace: "nowrap", fontWeight: 800, color: C.ink }}>
           목표 {won(target)}
         </span>
       </div>
       <div style={{ position: "relative", height: 44, borderRadius: 12, background: "#EDF1ED", border: `1px solid ${C.line}`, overflow: "hidden" }}>
-        {/* 천장 밖 = 레버로도 지금은 무리인 구간 */}
+        {/* 천장(최대가능금액) 밖 = 레버를 다 당겨도 대출로는 못 채우는 구간 → 항상 현금 몫 */}
         <div className="stripe-off gauge-fill" style={{ position: "absolute", top: 0, bottom: 0, left: `${pos(ceiling)}%`, width: `${Math.max(100 - pos(ceiling), 0)}%` }} />
-        {/* 지금 닿는 지점 */}
+        {/* 지금 닿는 대출액 */}
         <div className="gauge-fill" style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: `${pos(reach)}%`, background: fill }} />
         {/* 남은 간극 — 레버를 당기면 이게 줄어든다 */}
         {!reached && <div className="stripe-gap gauge-gap" style={{ position: "absolute", top: 0, bottom: 0, left: `${pos(reach)}%`, width: `${Math.max(pos(target) - pos(reach), 0)}%` }} />}
-        {/* 목표선 */}
+        {/* 목표선(이 집에 필요한 대출액) */}
         <div className="gauge-mark" style={{ position: "absolute", top: 0, bottom: 0, left: `${pos(target)}%`, width: 3, marginLeft: -1, background: C.ink, zIndex: 3 }} />
-        {/* 천장선 */}
+        {/* 천장선(레버를 다 당겼을 때의 최대 대출) */}
         <div className="gauge-mark" style={{ position: "absolute", top: 0, bottom: 0, left: `${pos(ceiling)}%`, width: 2, background: C.inkSoft, opacity: .6, zIndex: 2 }} />
       </div>
       <div style={{ position: "relative", height: 16, marginTop: 4, fontSize: 11, color: C.inkSoft }}>
-        <span className="gauge-mark" style={{ position: "absolute", left: `${pos(ceiling)}%`, transform: "translateX(-50%)", whiteSpace: "nowrap" }}>
-          천장 {won(ceiling)}
+        {pos(ceiling) < 88 && (
+          <span className="gauge-mark" style={{ position: "absolute", left: `${pos(ceiling)}%`, transform: "translateX(-50%)", whiteSpace: "nowrap" }}>
+            최대가능금액 {won(ceiling)}
+          </span>
+        )}
+        <span style={{ position: "absolute", right: 0, whiteSpace: "nowrap" }}>
+          시세 {won(price)}
         </span>
       </div>
     </div>
@@ -343,19 +353,19 @@ function LeverRow({ label, value, min = 0, max, step, display, sub, hint, onChan
 
 /* ── 행동 번역 — 시뮬레이션에서 멈추지 않고 실제로 할 수 있는 일로 옮긴다 ──
    가드레일 2: '뚫는 법·협상 멘트'가 아니라 '예습'. 창구에서 확인할 질문만 준다. */
-function Translate({ reached, trust, gap, overCeiling, lever, base, hasSpouse, creditNeed, repay, incomeNeed, incomeCap, productName }) {
+function Translate({ reached, trust, gap, overCeiling, lever, base, hasSpouse, debtNeed, repay, incomeNeed, incomeCap, productName }) {
   if (reached) {
     return (
       <Section title="④ 그래서 지금 뭘 하면 되나" tone={trust === "warn" ? "warn" : "ok"}
         subtitle="지금 레버 위치가 실제로 성립하는지만 확인하면 돼요.">
         <div style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 10 }}>
-          {base.creditLoan > lever.creditLoan
-            ? <>이 상태는 <b>신용대출을 약 {won(base.creditLoan - lever.creditLoan)}원 정리했다는 가정</b>이에요. 실행과 동시에 갚는 <b>일부상환조건부</b>로 걸 수 있는지가 관건이에요.</>
+          {base.debt > lever.debt
+            ? <>이 상태는 <b>기존 대출을 약 {won(base.debt - lever.debt)}원 정리했다는 가정</b>이에요. 실행과 동시에 갚는 <b>일부상환조건부</b>로 걸 수 있는지가 관건이에요.</>
             : <>지금 부채 그대로 목표에 닿아요. 레버를 더 당기지 않아도 돼요.</>}
           {lever.income > base.income && <><br />그리고 <b>인정소득 약 {won(lever.income)}원</b>이 잡힌다는 가정이에요 — {hasSpouse ? "배우자 소득 합산과 인정소득 산정이" : "상여·수당까지 인정소득 산정이"} 이대로 되는지 확인이 필요해요.</>}
         </div>
         <Block title="창구에서 이렇게 확인하세요" items={[
-          ...(base.creditLoan > lever.creditLoan ? [`신용대출을 약 ${won(base.creditLoan - lever.creditLoan)}원 일부상환조건부로 걸면 한도가 어디까지 되는지 확인 부탁드립니다.`] : []),
+          ...(base.debt > lever.debt ? [`기존 대출을 약 ${won(base.debt - lever.debt)}원 일부상환조건부로 걸면 한도가 어디까지 되는지 확인 부탁드립니다.`] : []),
           ...(lever.income > base.income ? [hasSpouse ? "배우자 소득 합산과 인정소득이 제 서류에서 얼마로 잡히는지 알려주세요." : "제 서류에서 인정소득이 얼마로 잡히는지 알려주세요."] : []),
           `${productName} 기준으로 제 상환능력 한도와 담보 한도 중 어느 쪽이 먼저 걸리는지 알려주세요.`,
           "잔금일에 맞춰 실행이 가능한 일정인지 먼저 확인 부탁드립니다.",
@@ -368,11 +378,11 @@ function Translate({ reached, trust, gap, overCeiling, lever, base, hasSpouse, c
   }
 
   const paths = [];
-  if (creditNeed !== null && repay > 0) paths.push({
+  if (debtNeed !== null && repay > 0) paths.push({
     key: "debt",
-    title: `신용대출을 약 ${won(creditNeed)}원까지 줄이면 닿아요`,
+    title: `대출 잔액을 약 ${won(debtNeed)}원까지 줄이면 닿아요`,
     body: <>= <b>약 {won(repay)}원 일부상환</b>이에요. 실행과 동시에 갚는 <b>일부상환조건부</b>로 거는 방식이 있어요 — 목돈을 미리 다 준비해야 하는 건 아니에요.</>,
-    ask: [`신용대출 약 ${won(repay)}원을 일부상환조건부로 걸면 한도가 어디까지 되는지 확인 부탁드립니다.`,
+    ask: [`기존 대출 약 ${won(repay)}원을 일부상환조건부로 걸면 한도가 어디까지 되는지 확인 부탁드립니다.`,
           "일부상환 시점이 대출 실행일과 같아도 되는지 알려주세요."],
   });
   if (incomeNeed !== null && incomeNeed > lever.income) paths.push({
@@ -414,7 +424,8 @@ function Translate({ reached, trust, gap, overCeiling, lever, base, hasSpouse, c
 
 /* ── ③ 정직한 천장 — 거짓 희망 기계가 되지 않기 위한 층 ── */
 function Ceiling({ ceil, target, reach, overCeiling, base, incomeMax, incomeCap, productName }) {
-  const wall = { ltv: "담보(LTV) 쪽", dti: "상환능력(DTI) 쪽", cap: "이 경로의 최대한도" }[ceil.binding.key];
+  /* 벽 이름은 계산이 붙여준 라벨을 그대로 쓴다 — 상품에 따라 DTI/DSR로 갈리므로 화면에서 다시 적으면 갈라진다. */
+  const wall = ceil.binding.label;
   return (
     <Section title="⑤ 정직한 천장" tone={overCeiling ? "off" : undefined}
       subtitle="두 레버를 끝까지 당겼을 때(부채 0 · 소득 상한) 닿는 최대선이에요. 이 위는 지금 무리라고 정직하게 그어둘게요.">
@@ -431,7 +442,7 @@ function Ceiling({ ceil, target, reach, overCeiling, base, incomeMax, incomeCap,
         천장을 만드는 벽: <b style={{ color: C.inkSoft }}>{wall}</b> ({won(ceil.binding.value)}).
         {ceil.binding.key === "ltv" && " 담보 벽은 부채를 다 갚아도, 소득이 올라도 안 내려가요. 시세와 방공제로 정해지는 값이에요."}
         {ceil.binding.key === "cap" && ` ${productName}의 경로 한도가 벽이라, 더 큰 한도의 경로로 갈아타는 게 유일한 길이에요.`}
-        {ceil.binding.key === "dti" && ` 소득 레버 상한(${won(incomeMax)}, 자격 상한 ${won(incomeCap)})까지 올린 값이에요. 부채는 0으로 가정했어요(원래 ${won(base.creditLoan)}).`}
+        {ceil.binding.key === "dti" && ` 소득 레버 상한(${won(incomeMax)}, 자격 상한 ${won(incomeCap)})까지 올린 값이에요. 부채는 0으로 가정했어요(원래 ${won(base.debt)}).`}
       </div>
     </Section>
   );
@@ -454,12 +465,12 @@ function Ranked({ ranked, closedByLever, better, picked, lever, target, reached,
         const on = p.key === picked.key;
         const covers = p.at >= target;
         /* 안 닿는 경로엔 "얼마 갚으면 열리는지"를 그 상품 기준으로 역산해 붙인다. */
-        const need = covers ? null : creditLoanToReach(p.product, lever, p.limit, target);
-        const repay = need === null ? null : Math.max(lever.creditLoan - need, 0);
+        const need = covers ? null : debtToReach(p.product, lever, p.limit, target);
+        const repay = need === null ? null : Math.max(lever.debt - need, 0);
         return (
           <button key={p.key} onClick={() => onPickOther(p.key)}
             style={{ width: "100%", textAlign: "left", marginBottom: 8, padding: "11px 13px", borderRadius: 12, cursor: "pointer", border: `1.5px solid ${on ? C.greenDeep : C.line}`, background: on ? "#F3F9F5" : "#fff" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+            <div style={{ display: "flex", color: C.inkSoft, justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
               <span style={{ fontSize: 14, fontWeight: 800 }}>{p.title}{on && <span style={{ fontSize: 11, color: C.greenDeep, marginLeft: 6 }}>보는 중</span>}</span>
               <span style={{ fontSize: 14, fontWeight: 800, color: covers ? C.greenDeep : C.amber, fontVariantNumeric: "tabular-nums" }}>약 {eok(p.at)}</span>
             </div>

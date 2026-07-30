@@ -1,7 +1,7 @@
 /* 계산 로직 한 곳. 화면(JSX)을 넣지 말 것.
    여러 페이지가 여기서만 import 한다 — 파일마다 다시 정의하면 규칙이 갈라진다.
    역할 분담: 상품 '규칙 데이터'는 src/products/*, 그 데이터를 읽는 '판정·계산'은 여기. */
-import { RULE, AMBER_BAND, PRODUCTS, SPOUSE_INCOME_BANDS, INCOME_EDGE_MARGIN } from "./data.js";
+import { RULE, AMBER_BAND, PRODUCTS, SPOUSE_INCOME_BANDS, INCOME_EDGE_MARGIN, ESTIMATED_DEBT_RATE, DIDIMDOL_DTI } from "./data.js";
 import { PRODUCT_RULES, NEWBORN_RULE, NEWLYWED_YEARS, WEDDING_SOON_MONTHS } from "./products/index.js";
 
 /* ── 포맷 ── */
@@ -31,17 +31,18 @@ const monthsBetween = (from, to) => (to.getFullYear() - from.getFullYear()) * 12
 /* 자격 화면은 부채를 묻지 않는다 — 자격은 소득상한 위/아래로 갈리지 부채로 갈리지 않기 때문.
    부채는 상품을 고른 뒤 Strategy(조종간)의 '부채 레버' 값으로 들어온다.
 
-   view = 상품이 기존 부채를 보는 잣대. 상품별로 어느 view를 쓰는지는 products/limit.js에 있다.
-     "interestOnly"          기존 대출을 이자만 본다 (기금 DTI 관행 근사)
+   ⚠️ 사용자에게 받는 부채 입력은 **잔액 하나뿐이다**(신용대출·마이너스통장·할부 등을 합친 대충값).
+      월상환액은 묻지 않는다 — 두 잣대 모두 잔액에서 출발하고, 해석만 다르기 때문이다.
+
+   여기(DSR 계열) view = 상품이 그 잔액을 보는 잣대:
+     "interestOnly"          이자만 본다
      "principalAndInterest"  원리금으로 본다 (은행 DSR 관행 근사)
-   ✏️ 가정 금리·만기는 RULE.creditRate / RULE.creditYears — 전부 가상값. 실제 값으로 교체할 것.
-   기타 대출은 이미 '월상환액'으로 받으므로 두 view 모두 그대로 12개월 환산한다. */
-export function annualDebtService(creditLoan, otherMonthly, view = "principalAndInterest") {
-  const credit = num(creditLoan);
-  const creditAnnual = credit <= 0 ? 0
-    : view === "interestOnly" ? credit * RULE.creditRate
-    : credit / RULE.creditYears + credit * RULE.creditRate;
-  return creditAnnual + num(otherMonthly) * 12;
+   ⚠️ 디딤돌은 이 함수를 쓰지 않는다 — 디딤돌 DTI는 아래 didimdolDtiLimit / otherDebtInterest.
+   ✏️ 가정 금리·만기는 RULE.creditRate / RULE.creditYears — 전부 가상값. 실제 값으로 교체할 것. */
+export function annualDebtService(debtBalance, view = "principalAndInterest") {
+  const d = num(debtBalance);
+  if (d <= 0) return 0;
+  return view === "interestOnly" ? d * RULE.creditRate : d / RULE.creditYears + d * RULE.creditRate;
 }
 
 /* 소득의 질 → 신뢰도. 금액만큼 중요한 게 "지금도 인정되는 소득인가"다.
@@ -53,13 +54,38 @@ export function incomeTrust(q) {
 }
 
 /* ── 한도 ── */
-export function repaymentCapacity(annualIncome, ratio, annualRate, years, existingAnnual) {
+/* 순수 계산: 월상환액 1을 감당할 수 있을 때의 원금(= 연금현가계수). PMT 역산의 공통 산수다.
+   '정책'이 아니라 '산수'라서 DSR·DTI 두 잣대가 같이 쓴다 — 잣대의 차이는 무엇을 빼는지에 있다. */
+const annuityFactor = (annualRate, years) => {
   const r = annualRate / 12, n = years * 12;
+  return (Math.pow(1 + r, n) - 1) / (r * Math.pow(1 + r, n));
+};
+
+/* 은행(DSR) 잣대 — 기존 부채를 '원리금 전체'로 보고 소득에서 뺀다.
+   ⚠️ 디딤돌은 이 함수를 쓰지 않는다(디딤돌은 아래 didimdolDtiLimit). 두 식을 다시 합치지 말 것.
+   지금 쓰는 곳: 예산 화면의 천장(App.jsx), 그리고 capacityModel이 fundDTI가 아닌 상품. */
+export function repaymentCapacity(annualIncome, ratio, annualRate, years, existingAnnual) {
   const monthlyRoom = (annualIncome * ratio) / 12 - existingAnnual / 12;
   if (monthlyRoom <= 0) return 0;
-  const factor = (Math.pow(1 + r, n) - 1) / (r * Math.pow(1 + r, n));
-  return monthlyRoom * factor;
+  return monthlyRoom * annuityFactor(annualRate, years);
 }
+
+/* 디딤돌(DTI) 잣대 — 은행 DSR과 식 자체가 다르다. 그래서 함수를 따로 둔다.
+     DTI(%) = ( ① 디딤돌 자체의 연간 원리금 + ② 기타부채 이자 ) / 연소득 × 100
+   여기서 구하는 건 ①에 쓸 수 있는 여유분에서 역산한 '디딤돌 최대 대출원금'이다.
+     ② 기타부채이자 = 잔액 × ESTIMATED_DEBT_RATE(추정금리)
+        DTI가 기존 부채에서 보는 건 이자뿐이다 — 원금 상환 스케줄(월상환액·산정만기)은 보지 않는다.
+        그래서 사용자에게도 '잔액'만 물으면 된다. 은행 DSR용 annualDebtService를 여기 쓰면 안 된다.
+   otherDebtBalance = 갖고 있는 대출 잔액 합계(만원). 부채 레버 값이 그대로 들어온다. */
+export function didimdolDtiLimit(annualIncome, otherDebtBalance, annualRate, years = DIDIMDOL_DTI.years, dtiCap = DIDIMDOL_DTI.cap) {
+  const allowedAnnual = num(annualIncome) * dtiCap;                     // DTI상한 소득
+  const roomAnnual = allowedAnnual - otherDebtInterest(otherDebtBalance); // ①에 쓸 수 있는 연 원리금
+  if (roomAnnual <= 0) return 0;
+  return (roomAnnual / 12) * annuityFactor(annualRate, years);          // PMT 역산 → 최대 원금
+}
+
+/* ② 기존 부채가 DTI에서 먹는 연간 금액 = 이자만. */
+export const otherDebtInterest = (balance) => num(balance) * ESTIMATED_DEBT_RATE;
 
 /* 지도·목록의 초록/노랑/회색 판정. 부채 0을 가정한 '천장' 기준이다. */
 export function evaluate(unit, dsrCap, cash) {
@@ -72,19 +98,32 @@ export function evaluate(unit, dsrCap, cash) {
   return { ...unit, budget, slack, color, limitedBy: ltv <= dsrCap ? "ltv" : "dsr" };
 }
 
-/* 상품 한도 = Min(LTV기반, DTI기반, 이 경로의 한도).
+/* 상품 한도 = Min(LTV기반, 상환능력, 이 경로의 한도).
    한 함수가 '대략 한도'(부채 0)와 '구체 한도'(정밀 부채)를 둘 다 만든다 — 잣대를 갈라놓지 않기 위해.
-   capOverride = 자격 판정에서 고른 티어의 loanCap(2억/3.2억/4억…). 없으면 상품 기본 cap. */
-export function limitParts(p, price, income, existingAnnual = 0, capOverride = null) {
+   capOverride = 자격 판정에서 고른 티어의 loanCap(2억/3.2억/4억…). 없으면 상품 기본 cap.
+
+   debt = 레버에서 온 raw 부채 { balance, view } (만원). null이면 무부채(천장 잣대).
+   받는 건 잔액 하나뿐이고, 그걸 이자로 볼지 원리금으로 볼지는 잣대가 정한다.
+   상환능력을 어떤 식으로 볼지는 상품 데이터(PRODUCTS[key].capacityModel)가 정한다 —
+   여기서 productKey로 분기하지 말 것. fundDTI = 디딤돌 DTI식 / 그 외 = 은행 DSR식(보수적 기본값). */
+export function limitParts(p, price, income, debt = null, capOverride = null) {
   const ltv = Math.max(price * p.LTV - (p.offsetsRoomDeduction ? 0 : RULE.roomDeduction), 0);
-  const dti = repaymentCapacity(income, p.ratio, p.calcRate, 30, existingAnnual);
+  const balance = debt?.balance ?? 0;
+
+  /* 디딤돌: DTI(기존 부채는 이자만) / 그 외: DSR(기존 부채를 원리금으로) */
+  const fund = p.capacityModel === "fundDTI";
+  const existingAnnual = fund ? otherDebtInterest(balance) : annualDebtService(balance, debt?.view);
+  const capacity = fund
+    ? didimdolDtiLimit(income, balance, p.calcRate)
+    : repaymentCapacity(income, p.ratio, p.calcRate, 30, existingAnnual);
+
   const parts = [
-    { key: "ltv", label: p.offsetsRoomDeduction ? "담보(LTV · 방공제 상쇄)" : "담보(LTV − 방공제)", value: ltv },
-    { key: "dti", label: "상환능력(DTI)", value: dti },
-    { key: "cap", label: "이 경로의 최대한도", value: capOverride ?? p.cap },
+    { key: "ltv", label: p.offsetsRoomDeduction ? "담보(LTV · 방공제 상쇄)" : "담보(LTV - 방공제)", value: ltv },
+    { key: "dti", label: fund ? "상환능력(DTI)" : "상환능력(DSR)", value: capacity },
+    { key: "cap", label: "정책상 최대한도", value: capOverride ?? p.cap },
   ];
   const binding = parts.reduce((a, b) => (b.value < a.value ? b : a));
-  return { limit: Math.max(binding.value, 0), parts, binding };
+  return { limit: Math.max(binding.value, 0), parts, binding, existingAnnual };
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -240,10 +279,11 @@ export function judgeRule(rule, f) {
   };
 }
 
-/* 대략 한도 = Min(경로 한도, LTV기반, DTI기반@부채0).
-   부채를 아직 안 받았으니 예산 화면과 같은 '천장' 잣대다. 상품을 고르면 여기서 내려간다. */
+/* 대략 한도 = Min(경로 한도, LTV기반, 상환능력@부채0).
+   부채를 아직 안 받았으니 예산 화면과 같은 '천장' 잣대다. 상품을 고르면 여기서 내려간다.
+   debt=null → 무부채 가정. 상환능력 식(디딤돌 DTI / 은행 DSR)은 상품 데이터가 고른다. */
 export function roughLimit(judged, f) {
-  return limitParts(PRODUCTS[judged.product], f.price, f.income, 0, judged.limit).limit;
+  return limitParts(PRODUCTS[judged.product], f.price, f.income, null, judged.limit).limit;
 }
 
 /* 전 상품 판정 → { passed(대략 한도 높은 순), others(근접 순), all }.

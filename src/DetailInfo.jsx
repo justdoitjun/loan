@@ -11,35 +11,31 @@ import { LEVER, C } from "./data.js";
 import { incomeTrust, won } from "./engine.js";
 import { Section, Pills, Choice } from "./ui.jsx";
 
-/* 아직 아무것도 안 받은 상태. debt가 null이면 조종간은 레버를 아직 못 그린다(첫 박자 대기). */
+/* 아직 아무것도 안 받은 상태. debt가 null이면 조종간은 레버를 아직 못 그린다(첫 박자 대기).
+   debt = 갖고 있는 대출 '잔액 합계'(만원) 하나. 월상환액은 묻지 않는다 —
+   디딤돌 DTI는 잔액의 이자만 보고, 은행 DSR도 같은 잔액에서 출발한다. */
 export const EMPTY_DETAIL = { debt: null, incomeQuality: { type: null, stable: null } };
 
 /* 이 컴포넌트의 산출물이 다 찼는지 = 레버를 그릴 수 있는지.
    0도 유효한 답이라 != null로 본다(0을 '안 답함'으로 읽으면 무부채인 사람이 막힌다). */
-export const detailReady = (d) =>
-  !!d.debt && d.debt.creditLoan != null && d.debt.otherMonthly != null && incomeTrust(d.incomeQuality) !== null;
+export const detailReady = (d) => d.debt != null && incomeTrust(d.incomeQuality) !== null;
 
 const manLabel = (v) => (v === 0 ? "없어요" : won(v));
 
 export default function DetailInfo({ value, onChange }) {
-  const debt = value.debt ?? { creditLoan: null, otherMonthly: null };
   const q = value.incomeQuality ?? { type: null, stable: null };
 
-  const setDebt = (k, v) => onChange({ ...value, debt: { ...debt, [k]: v } });
   const setQ = (k, v) => onChange({ ...value, incomeQuality: { ...q, [k]: v } });
 
   const trust = incomeTrust(q);
 
   return (
     <Section title="① 지금 상태를 대충만 알려주세요"
-      subtitle="정확하지 않아도 돼요. 이건 정답이 아니라 레버의 시작 위치예요 — 넣고 나서 직접 당겨보게 됩니다.">
-      <Pills label="갖고 있는 신용대출이 어느 정도예요?" hint="마이너스통장은 약정 한도로 보는 게 안전해요. 정확하지 않아도 돼요."
-        options={LEVER.creditPills.map((v) => [manLabel(v) + (v >= 15000 ? " 이상" : ""), v])}
-        value={debt.creditLoan} onPick={(v) => setDebt("creditLoan", v)} />
-
-      <Pills label="기타 대출은요? (월 상환액)" hint="자동차할부·카드론 등. 정확하지 않아도 돼요."
-        options={LEVER.otherPills.map((v) => [v === 0 ? "없어요" : `월 ${v}만`, v])}
-        value={debt.otherMonthly} onPick={(v) => setDebt("otherMonthly", v)} />
+      subtitle="정확하지 않아도 돼요. 얼마나 늘리고 줄여야하는지를 볼거에요.">
+      {/* 부채는 이 한 칸이 전부다. 상환액·만기를 쪼개 묻지 않는다 — 잣대가 잔액에서 알아서 환산한다. */}
+      <Pills label="갖고 있는 대출이 어느 정도예요?" hint="마이너스통장은 약정 한도로 보는 게 안전해요. "
+        options={LEVER.debtPills.map((v, i, arr) => [manLabel(v) + (i === arr.length - 1 ? " 이상" : ""), v])}
+        value={value.debt} onPick={(v) => onChange({ ...value, debt: v })} />
 
       <div style={{ paddingTop: 12, borderTop: `1px solid ${C.line}` }}>
         <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 2 }}>소득의 유형을 반영해요 <span style={{ color: C.greenDeep }}>(중요해요)</span></div>
