@@ -89,10 +89,10 @@ export function Slider({ label, value, min, max, step, onChange, display }) {
 }
 
 /* 문을 닫지 않는 회색 카드. 사유만 받고, 대안은 호출부가 문장에 담는다. */
-export function ClosedCard({ reason }) {
+export function ClosedCard({ exception }) {
   return <div className="slideup" style={{ ...card, borderColor: C.greyDot, marginTop: 8 }}>
     <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6, color: C.inkSoft }}>지금은 닫혀 있어요</div>
-    <div style={{ fontSize: 14, color: C.inkSoft, lineHeight: 1.6 }}>{reason}</div>
+    <div style={{ fontSize: 14, color: C.inkSoft, lineHeight: 1.6 }}>{exception}</div>
   </div>;
 }
 

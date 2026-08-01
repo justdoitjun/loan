@@ -92,7 +92,8 @@ export const SPOUSE_INCOME_BANDS = [
 export const INCOME_EDGE_MARGIN = 1000;
 
 /* 무주택은 기금상품의 진입 게이트다. 여기서 막히면 뒤 질문은 물어볼 필요가 없다. */
-export const NO_HOME_REASON = "기금상품은 무주택이 기본이에요. 유주택이면 이 경로는 지금 닫혀 있어요(처분조건부 등 예외는 상담 확인). 은행상품 탭에서 일반 주담대부터 보세요.";
+export const NO_HOME_EXCEPTION = `이런 경우는 주택 수에 합산되지 않아요. \n 오피스텔, 25평 미만 단독주택(수도권 제외) 등, 무주택 여부에 대해 알고 싶다면 클릭하세요.`;
+
 
 /* ── 화면 상수 ── */
 export const C = { bg: "#F4F6F3", panel: "#FFFFFF", ink: "#1E2A24", inkSoft: "#5B6660", line: "#E4E9E4", green: "#2E9E6B", greenDeep: "#14705A", amber: "#E0A23A", greyDot: "#CBD1CE" };

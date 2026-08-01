@@ -6,22 +6,23 @@
    그래서 목록이 부채 입력 '전에' 뜨고, 그 자체가 리빌이 된다.
 
    ⚠️ 가능한 걸 하나로 좁히지 않는다. 조건이 되는 건 전부 카드로 보여준다. */
-import { SPOUSE_INCOME_BANDS, NO_HOME_REASON, TABS, C } from "./data.js";
+import { SPOUSE_INCOME_BANDS, NO_HOME_EXCEPTION, TABS, C } from "./data.js";
 import { buildCtx, deriveFacts, judgeAll, nearIncomeCap, ageOf, won, eok } from "./engine.js";
 import { BackButton, Choice, Section, ClosedCard, Placeholder, eyebrow, h1, card, fine, inputBox, pill } from "./ui.jsx";
 
 /* 자격 답변의 빈 상태. App이 최상위 state로 들고 있고 여기서만 채운다. */
 export const EMPTY_ELIG = {
+  ownBirthday: "",        // 본인 생년월일 (만30세 단독세대주 / 만39세 이하 판정)
   homeCount: null,        // 보유 주택 수 — 무주택(0)이 기금 진입 게이트
-  marital: null,          // "single" | "married" | "planned"
+  birthdays: [],          // 자녀 생년월일 (미성년 수 · 신생아 특례) — 혼인상태 전에 받음
+  marital: null,          // "single" (미혼/이혼) | "married" | "planned"
   marriedDate: "",        // 기혼일 때만
   weddingDate: "",        // 결혼예정일 때만
-  spouseBand: null,       // SPOUSE_INCOME_BANDS의 key (미혼이면 안 물음)
+  spouseBand: null,       // SPOUSE_INCOME_BANDS의 key (기혼만)
   spouseIncomeRaw: "",    // 소득상한 경계일 때만 받는 정밀값(만원)
+  householdType: null,    // 미혼일 때만: "alone" | "withDependent" | "notHeadOfHouse"
+  hasMiniDependents: null, // householdType === "withDependent" 또는 (미혼 && 30살 미만)일 때: 함께 사는 미성년자 있나요?
   firstTime: null,        // 생애최초 무주택
-  hasDependents: null,    // 부양가족 유무 → 없음이면 단독세대주 (기혼이면 안 물음)
-  ownBirthday: "",        // 본인 생년월일 (만30세 단독세대주 / 만39세 이하 판정)
-  birthdays: [],          // 자녀 생년월일 (미성년 수 · 신생아 특례)
   hasDreamAccount: null,  // 주택드림 통장 (해당자만)
 };
 
@@ -30,21 +31,38 @@ export default function Eligibility({ unit, cash, ownIncome, kind, setKind, elig
   const ctx = buildCtx({ unit, cash, ownIncome, elig });
 
   const gateOpen = elig.homeCount === 0;
+  const ageNow = ageOf(elig.ownBirthday);
+  const childrenFilled = elig.birthdays.every((d) => ageOf(d) !== null);
+
+  // Stage 1: 나이 → 무주택 확인
+  const stage1 = elig.ownBirthday !== "" && gateOpen;
+
+  // Stage 2: 자녀 정보
+  const stage2 = stage1 && childrenFilled;
+
+  // Stage 3: 혼인상태 · 배우자 소득
   const maritalReady =
     elig.marital === "single" ||
     (elig.marital === "married" && elig.marriedDate !== "") ||
     (elig.marital === "planned" && elig.weddingDate !== "");
-  /* 미혼이면 배우자 소득 질문 자체가 성립하지 않는다 → 건너뛴다. */
   const spouseSkipped = elig.marital === "single";
   const spouseReady = spouseSkipped || elig.spouseBand !== null;
-  /* 기혼이면 배우자가 세대원이라 단독세대주가 될 수 없다 → buildCtx가 확정, 질문 건너뛴다. */
-  const householdSkipped = elig.marital === "married";
-  const childrenFilled = elig.birthdays.every((d) => ageOf(d) !== null);
-  const restReady = elig.firstTime !== null && ctx.hasDependents !== null && elig.ownBirthday !== "" && childrenFilled;
+  const stage3 = stage2 && maritalReady && spouseReady;
 
-  const stage1 = gateOpen;                                 // 혼인상태 · 배우자 소득
-  const stage2 = stage1 && maritalReady && spouseReady;    // 나머지 자격 질문
-  const ready = stage2 && restReady;
+  // Stage 4: 세대 구성 (미혼만) + notHeadOfHouse는 자격 불가
+  const isSingle = elig.marital === "single";
+  const householdTypeReady = !isSingle || elig.householdType !== null;
+  const isNotHeadOfHouse = isSingle && elig.householdType === "notHeadOfHouse";
+  const stage4 = stage3 && householdTypeReady && !isNotHeadOfHouse;
+
+  // Stage 5: 함께 사는 미성년자 여부 (미혼 + 30살 미만 || householdType="withDependent"일 때만)
+  const isUnder30 = ageNow !== null && ageNow < 30;
+  const needsMiniDependentsQuestion = isSingle && (isUnder30 || elig.householdType === "withDependent");
+  const miniDependentsReady = !needsMiniDependentsQuestion || elig.hasMiniDependents !== null;
+  const stage5 = stage4 && miniDependentsReady;
+
+  // 최종 준비
+  const ready = stage5 && elig.firstTime !== null && elig.hasDreamAccount !== null;
 
   /* 경계 판정은 지금 답만으로 한 판정 결과를 근거로 한다(밴드 대표값 기준).
      이미 정밀값을 넣었으면 상한이 움직여도 칸을 닫지 않는다 — 입력값 유실 방지. */
@@ -75,15 +93,25 @@ export default function Eligibility({ unit, cash, ownIncome, kind, setKind, elig
         <>
           <div style={eyebrow}>자격 조건</div>
           <h1 style={h1}>지금은 어떤 상태인가요?</h1>
-          {/* <p style={{ fontSize: 13, color: C.inkSoft, margin: "0 0 16px", lineHeight: 1.6 }}>
-            자격은 여기서 한 번만 받아요. <b style={{ color: C.ink }}>기존 대출은 아직 묻지 않아요</b> — 자격은 소득 상한으로 갈리지 부채로 갈리지 않거든요. 부채는 상품을 고른 다음에 봐요.
-          </p> */}
+
+          <div style={{ borderTop: `1px solid ${C.line}`, margin: "6px 0 16px" }} />
+
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 13, color: C.inkSoft, fontWeight: 600, marginBottom: 5 }}>본인 생일이 언제인가요?</div>
+            <input type="date" value={elig.ownBirthday} onChange={(e) => set("ownBirthday", e.target.value)} style={inputBox} />
+          </div>
 
           <Choice label="보유 주택 수 (부부합산)" options={[["무주택", 0], ["1주택", 1], ["2주택+", 2]]} value={elig.homeCount} onPick={(v) => set("homeCount", v)} />
 
-          {elig.homeCount !== null && !gateOpen ? <ClosedCard reason={NO_HOME_REASON} /> : null}
+          {elig.homeCount !== null && !gateOpen ? <ClosedCard exception={NO_HOME_EXCEPTION} /> : null}
 
           {stage1 && (
+            <div className="slideup">
+              <ChildDates birthdays={elig.birthdays} setBirthdays={(v) => set("birthdays", v)} />
+            </div>
+          )}
+
+          {stage2 && (
             <div className="slideup">
               <MaritalChoice elig={elig} set={set} />
               {maritalReady && (spouseSkipped
@@ -99,40 +127,43 @@ export default function Eligibility({ unit, cash, ownIncome, kind, setKind, elig
             </div>
           )}
 
-          {stage2 && (
+          {stage3 && isSingle && (
             <div className="slideup">
-              <div style={{ fontSize: 12, color: C.inkSoft, marginBottom: 12 }}>
-                본인 {won(ownIncome)}원{!spouseSkipped && <> + 배우자 {won(ctx.spouseIncome)}원</>} → <b style={{ color: C.ink }}>합산 약 {won(ctx.totalIncome)}원</b>으로 계산할게요.
-              </div>
-              <div style={{ borderTop: `1px solid ${C.line}`, margin: "6px 0 16px" }} />
+              <HouseholdChoice elig={elig} set={set} />
+            </div>
+          )}
 
-              <Choice label="생애최초로 집을 사시나요? (부부 모두 주택 취득 이력 없음)"
-                options={[["예", true], ["아니오", false]]} value={elig.firstTime} onPick={(v) => set("firstTime", v)} />
+          {isNotHeadOfHouse && (
+            <div className="slideup">
+              <ClosedCard exception="아쉽게도, 디딤돌은 세대주만 허용해요. 3개월 이내에 결혼을 하시거나, 등본 상 세대주를 바꾸면 가능해요!" />
+            </div>
+          )}
 
-              {householdSkipped
-                ? <SkippedNote>기혼이라 세대에 배우자가 있어요 — 단독세대주 여부는 묻지 않아요.</SkippedNote>
-                : <Choice label="세대에 부양가족이 있나요?"
-                    options={[["있음", true], ["없음(단독세대주)", false]]} value={elig.hasDependents} onPick={(v) => set("hasDependents", v)} />}
+          {stage4 && needsMiniDependentsQuestion && (
+            <div className="slideup">
+              <Choice label="혹시, 같이 사는 사람 중에 자녀나 미성년 형제가 있나요?"
+                options={[["네", true], ["아니오", false]]} value={elig.hasMiniDependents} onPick={(v) => set("hasMiniDependents", v)} />
+              {elig.hasMiniDependents === true && (
+                <SkippedNote>같이 산지 6개월이 넘었다면, 디딤돌 자격이 되어요.</SkippedNote>
+              )}
+            </div>
+          )}
 
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 13, color: C.inkSoft, fontWeight: 600, marginBottom: 5 }}>본인 생년월일</div>
-                <div style={{ fontSize: 12, color: "#9AA3A0", marginBottom: 7 }}>만 30세·만 39세 기준이 걸린 경로가 있어서 필요해요.</div>
-                <input type="date" value={elig.ownBirthday} onChange={(e) => set("ownBirthday", e.target.value)} style={inputBox} />
-              </div>
-
-              <ChildDates birthdays={elig.birthdays} setBirthdays={(v) => set("birthdays", v)} />
-
-              {/* 주택드림은 통장이 전제라 해당자만 답하면 되는 질문. 필수로 걸지 않는다. */}
+          {stage5 && (
+            <div className="slideup">
               <div style={{ paddingTop: 10, borderTop: `1px solid ${C.line}` }}>
                 <Choice label="주택드림 청약통장으로 당첨된 건인가요? (해당자만)"
                   options={[["예", true], ["아니오·해당없음", false]]} value={elig.hasDreamAccount} onPick={(v) => set("hasDreamAccount", v)} />
               </div>
+
+              <Choice label="생애최초로 집을 사시나요? (부부 모두 주택 취득 이력 없음)"
+              options={[["예", true], ["아니오", false]]} value={elig.firstTime} onPick={(v) => set("firstTime", v)} />
             </div>
           )}
 
           {gateOpen && (ready
             ? <Results ctx={ctx} passed={passed} others={others} onPick={onPick} />
-            : stage2 && <Section title="가능한 상품" subtitle="위 항목을 채우면 바로 판정해 드려요.">
+            : stage5 && <Section title="가능한 상품" subtitle="위 항목을 채우면 바로 판정해 드려요.">
                 <Placeholder>생애최초·세대구성·생년월일·자녀가 채워지면 <b>조건이 되는 상품을 전부</b> 보여드려요. 하나로 좁히지 않아요.</Placeholder>
               </Section>)}
 
@@ -263,6 +294,19 @@ function SpouseIncomeChoice({ value, onPick }) {
       <div style={{ fontSize: 12, color: "#9AA3A0", marginBottom: 7, lineHeight: 1.5 }}>본인 소득은 앞 예산 화면에서 이미 받았어요. 여기선 배우자 몫만 고르면 돼요. (단위: 만원 · 세전)</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         {SPOUSE_INCOME_BANDS.map((b) => <button key={b.key} onClick={() => onPick(b.key)} style={pill(value === b.key)}>{b.label}</button>)}
+      </div>
+    </div>
+  );
+}
+
+function HouseholdChoice({ elig, set }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 13, color: C.inkSoft, fontWeight: 600, marginBottom: 7 }}>세대 구성</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {[["혼자 사는 세대주", "alone"], ["세대주인데, 같이 사는 사람이 있어요", "withDependent"], ["세대원이에요", "notHeadOfHouse"]].map(([t, v]) => (
+          <button key={v} onClick={() => set("householdType", v)} style={{ ...pill(elig.householdType === v), width: "100%" }}>{t}</button>
+        ))}
       </div>
     </div>
   );

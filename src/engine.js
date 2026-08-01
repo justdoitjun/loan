@@ -143,8 +143,6 @@ export function buildCtx({ unit, cash, ownIncome, elig }) {
   const spouseIncome = spouseIncomeOf(elig);
   return {
     ...elig,
-    /* 기혼이면 세대에 배우자가 있으니 단독세대주가 될 수 없다 — 묻지 않고 확정한다. */
-    hasDependents: elig.marital === "married" ? true : elig.hasDependents,
     unit, cash, ownIncome, spouseIncome,
     totalIncome: ownIncome + spouseIncome,
     needed: Math.max(unit.price - cash, 0),
@@ -198,9 +196,21 @@ export function deriveFacts(ctx) {
     return withinYears && b >= newbornFloor;
   });
 
-  const hasDependents = ctx.hasDependents === true;
-  const sole = ctx.hasDependents === false;         // 단독세대주
-  const adult30Sole = sole && age !== null && age >= 30;
+  /* 기혼: 배우자 있음. 미혼: householdType="withDependent" && hasMiniDependents=true일 때만 부양가족 있음 */
+  const hasDependents = married || (single && ctx.householdType === "withDependent" && ctx.hasMiniDependents === true);
+  const sole = !married && !hasDependents;         // 단독세대주(부양가족 없음)
+
+  /* 미혼·결혼예정의 "부양가족 있음"은 배우자가 아니라 미성년 형제자매·직계존속이다.
+     30세 미만이면 부양가족이 있으면 예외로 세대주 인정 (6개월 이상은 hasMiniDependents === true에 포함되어 있음).
+     30세 이상은 이미 단독세대주 조건만으로 게이트를 통과한다. */
+  const adult30Sole = !married && age !== null && age >= 30 && sole;       // 30세 이상 + 부양 없음
+  const soleException30Under = single && age !== null && age < 30 && ctx.hasMiniDependents === true;
+  const householdHead = married || adult30Sole || soleException30Under;    // 세대주 요건(자격 게이트)
+  /* tier는 게이트보다 좁다 — 부양이 있으면 게이트는 통과해도 tier에선 빠진다(일반가구 기준 적용). */
+  const adult30SoleSingle = single && adult30Sole && !hasDependents;
+
+  /* 40살 이상은 청년주택드림 제외 */
+  const over40 = age !== null && age >= 40;
 
   return {
     /* 금액·물건 */
@@ -212,12 +222,13 @@ export function deriveFacts(ctx) {
     single, married, planned,
     newlywed: withinNewlywed || weddingSoon,   // 혼인 7년 이내 또는 결혼예정 3개월 이내
     weddingSoon,
-    hasDependents, sole, adult30Sole,
-    adult30SoleSingle: adult30Sole && single,
+    hasDependents, sole, adult30Sole, householdHead, soleException30Under,
+    adult30SoleSingle,
     minors, twoPlusMinors: minors >= 2,
     hasNewborn,
     dualIncome: (ctx.spouseIncome || 0) > 0,
     under39: age !== null && age <= 39,
+    over40,
     hasDreamAccount: ctx.hasDreamAccount === true,
     jeonseVictim: ctx.jeonseVictim === true,
     /* 표시용 */
@@ -253,9 +264,11 @@ export function judgeRule(rule, f) {
   if (income.perPersonCap != null) {
     checks.push({ key: "perPerson", label: "1인 소득", actual: f.maxPersonIncome, cap: income.perPersonCap, tier: income.label, over: f.maxPersonIncome - income.perPersonCap });
   }
-  /* areaCap이 null인 상품은 면적 요건이 데이터에 없다는 뜻 → 검사하지 않는다 */
+  /* areaCap이 null인 상품은 면적 요건이 데이터에 없다는 뜻 → 검사하지 않는다.
+     배열이면 priceCap·loanCap처럼 조건별 티어(예: 미혼단독세대주만 60㎡) — 위에서부터 첫 매치. */
   if (rule.areaCap != null) {
-    checks.push({ key: "area", label: "전용면적", actual: f.areaM2, cap: rule.areaCap, tier: `${rule.areaCap}㎡ 이하`, over: f.areaM2 - rule.areaCap, unit: "㎡" });
+    const area = Array.isArray(rule.areaCap) ? pickTier(rule.areaCap, f) : { value: rule.areaCap, label: `${rule.areaCap}㎡ 이하` };
+    checks.push({ key: "area", label: "전용면적", actual: f.areaM2, cap: area.value, tier: area.label, over: f.areaM2 - area.value, unit: "㎡" });
   }
 
   const failedChecks = checks.filter((c) => c.over > 0);

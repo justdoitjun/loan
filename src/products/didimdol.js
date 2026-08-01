@@ -18,7 +18,7 @@ export const DIDIMDOL_RULES = [
     key: "general", product: "didimdol", name: "일반가구", enabled: true,
     requires: [
       { flags: ["noHome"], label: "무주택" },
-      { flags: [["hasDependents", "adult30Sole"]], label: "세대주(부양가족 있거나 만30세 이상 단독세대주)" },
+      { flags: ["householdHead"], label: "세대주(기혼이거나 만30세 이상 단독세대주, 또는 미성년 형제자매·직계존속을 6개월 이상 부양하는 만30세 미만 단독세대주)" },
     ],
     incomeCap: [
       { when: ["newlywed"], value: 8500, label: "신혼" },
@@ -30,13 +30,18 @@ export const DIDIMDOL_RULES = [
       { when: ["adult30SoleSingle"], value: 30000, label: "만30세 이상 단독세대주(미혼)" },
       { when: [], value: 50000, label: "기본" },
     ],
-    areaCap: 85,
+    /* 미혼단독세대주(adult30SoleSingle)만 60㎡ — 미성년 형제자매·직계존속을 6개월 이상
+       부양하면(만30세 이상이라도) 이 tier에서 빠져 아래 "기본" 85㎡로 넘어간다. */
+    areaCap: [
+      { when: ["adult30SoleSingle"], value: 60, label: "미혼단독세대주" },
+      { when: [], value: 85, label: "기본" },
+    ],
     loanCap: [
       { when: [["newlywed", "twoPlusMinors"]], value: 32000, label: "신혼 또는 미성년 2자녀 이상" },
       { when: ["adult30SoleSingle", "firstTime"], value: 20000, label: "만30세 이상 단독세대주 + 생애최초" },
       { when: ["adult30SoleSingle"], value: 15000, label: "만30세 이상 단독세대주(미혼)" },
-      { when: ["firstTime"], value: 24000, label: "생애최초" },
-      { when: [], value: 20000, label: "기본" },
+      { when: ["firstTime"], value: 30000, label: "생애최초" },
+      { when: [], value: 25000, label: "기본" },
     ],
     note: "가장 기본 경로예요. 우대 조건이 붙을수록 상한과 한도가 같이 올라가요.",
   },
@@ -73,6 +78,7 @@ export const DIDIMDOL_RULES = [
     key: "youthDream", product: "didimdol", name: "청년 주택드림", enabled: true,
     requires: [
       { flags: ["noHome"], label: "무주택" },
+      { flags: ["householdHead"], label: "세대주(기혼이거나 만30세 이상 단독세대주, 또는 미성년 형제자매·직계존속을 6개월 이상 부양하는 만30세 미만 단독세대주)" },
       { flags: ["hasDreamAccount"], label: "주택드림 통장 청약당첨 + 통장 연계" },
       { flags: ["under39"], label: "만 39세 이하" },
     ],
