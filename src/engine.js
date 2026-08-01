@@ -201,13 +201,13 @@ export function deriveFacts(ctx) {
   const sole = !married && !hasDependents;         // 단독세대주(부양가족 없음)
 
   /* 미혼·결혼예정의 "부양가족 있음"은 배우자가 아니라 미성년 형제자매·직계존속이다.
-     30세 미만이면 부양가족이 있으면 예외로 세대주 인정 (6개월 이상은 hasMiniDependents === true에 포함되어 있음).
-     30세 이상은 이미 단독세대주 조건만으로 게이트를 통과한다. */
-  const adult30Sole = !married && age !== null && age >= 30 && sole;       // 30세 이상 + 부양 없음
-  const soleException30Under = single && age !== null && age < 30 && ctx.hasMiniDependents === true;
-  const householdHead = married || adult30Sole || soleException30Under;    // 세대주 요건(자격 게이트)
+     세대주 자격: 기혼 || (30세 이상 미혼) || (30세 미만 미혼이면서 householdType 선택함)
+     householdType="notHeadOfHouse"는 이미 화면에서 차단됨. */
+  const adult30Plus = !married && age !== null && age >= 30;               // 30세 이상 미혼
+  const soleException30Under = single && age !== null && age < 30 && (ctx.householdType === "alone" || ctx.householdType === "withDependent");
+  const householdHead = married || adult30Plus || soleException30Under;    // 세대주 요건(자격 게이트)
   /* tier는 게이트보다 좁다 — 부양이 있으면 게이트는 통과해도 tier에선 빠진다(일반가구 기준 적용). */
-  const adult30SoleSingle = single && adult30Sole && !hasDependents;
+  const adult30SoleSingle = single && age !== null && age >= 30 && sole;   // 30세 이상 미혼 단독세대주
 
   /* 40살 이상은 청년주택드림 제외 */
   const over40 = age !== null && age >= 40;
