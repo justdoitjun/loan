@@ -209,9 +209,6 @@ export function deriveFacts(ctx) {
   /* tier는 게이트보다 좁다 — 부양이 있으면 게이트는 통과해도 tier에선 빠진다(일반가구 기준 적용). */
   const adult30SoleSingle = single && age !== null && age >= 30 && sole;   // 30세 이상 미혼 단독세대주
 
-  /* 40살 이상은 청년주택드림 제외 */
-  const over40 = age !== null && age >= 40;
-
   return {
     /* 금액·물건 */
     income: ctx.totalIncome, price: ctx.unit.price, areaM2: ctx.unit.areaM2,
@@ -222,13 +219,13 @@ export function deriveFacts(ctx) {
     single, married, planned,
     newlywed: withinNewlywed || weddingSoon,   // 혼인 7년 이내 또는 결혼예정 3개월 이내
     weddingSoon,
-    hasDependents, sole, adult30Sole, householdHead, soleException30Under,
+    hasDependents, sole, adult30Plus, householdHead, soleException30Under,
     adult30SoleSingle,
     minors, twoPlusMinors: minors >= 2,
     hasNewborn,
     dualIncome: (ctx.spouseIncome || 0) > 0,
+    /* 청년주택드림의 나이 게이트. 만 40세 이상은 이 플래그가 꺼져서 규칙 requires에서 걸러진다. */
     under39: age !== null && age <= 39,
-    over40,
     hasDreamAccount: ctx.hasDreamAccount === true,
     jeonseVictim: ctx.jeonseVictim === true,
     /* 표시용 */
