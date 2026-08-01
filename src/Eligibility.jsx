@@ -44,7 +44,9 @@ export default function Eligibility({ unit, cash, ownIncome, kind, setKind, elig
   const maritalReady =
     elig.marital === "single" ||
     (elig.marital === "married" && elig.marriedDate !== "") ||
-    (elig.marital === "planned" && elig.weddingDate !== "");
+    (elig.marital === "planned" );
+
+    // (elig.marital === "planned" && elig.weddingDate !== "");
   const spouseSkipped = elig.marital === "single";
   const spouseReady = spouseSkipped || elig.spouseBand !== null;
   const stage3 = stage2 && maritalReady && spouseReady;
@@ -267,7 +269,7 @@ function MaritalChoice({ elig, set }) {
     <div style={{ marginBottom: 14 }}>
       <div style={{ fontSize: 13, color: C.inkSoft, fontWeight: 600, marginBottom: 7 }}>혼인상태</div>
       <div style={{ display: "flex", gap: 8 }}>
-        {[["미혼", "single"], ["기혼", "married"], ["결혼예정", "planned"]].map(([t, v]) => (
+        {[["미혼", "single"], ["기혼", "married"], ["결혼예정(3개월 내)", "planned"]].map(([t, v]) => (
           <button key={v} onClick={() => set("marital", v)} style={pill(elig.marital === v)}>{t}</button>
         ))}
       </div>
@@ -277,12 +279,14 @@ function MaritalChoice({ elig, set }) {
           <input type="date" value={elig.marriedDate} onChange={(e) => set("marriedDate", e.target.value)} style={inputBox} />
         </div>
       )}
-      {elig.marital === "planned" && (
-        <div className="slideup" style={{ marginTop: 8 }}>
-          <div style={{ fontSize: 12, color: C.inkSoft, marginBottom: 4 }}>결혼 예정일 (3개월 이내면 신혼으로 봐요)</div>
-          <input type="date" value={elig.weddingDate} onChange={(e) => set("weddingDate", e.target.value)} style={inputBox} />
-        </div>
-      )}
+      {elig.marital === "planned" 
+      // && (
+      //   <div className="slideup" style={{ marginTop: 8 }}>
+      //     <div style={{ fontSize: 12, color: C.inkSoft, marginBottom: 4 }}>결혼 예정일 (3개월 이내면 신혼으로 봐요)</div>
+      //     <input type="date" value={elig.weddingDate} onChange={(e) => set("weddingDate", e.target.value)} style={inputBox} />
+      //   </div>
+      // )
+      }
     </div>
   );
 }

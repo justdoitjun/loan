@@ -9,7 +9,7 @@
    ⚠️ 자격은 여기서 절대 묻지 않는다. 자격 질문이 필요하면 Eligibility에 추가할 것. */
 import { LEVER, C } from "./data.js";
 import { incomeTrust, won } from "./engine.js";
-import { Section, Pills, Choice } from "./ui.jsx";
+import { Section, Slider, Pills, Choice } from "./ui.jsx";
 
 /* 아직 아무것도 안 받은 상태. debt가 null이면 조종간은 레버를 아직 못 그린다(첫 박자 대기).
    debt = 갖고 있는 대출 '잔액 합계'(만원) 하나. 월상환액은 묻지 않는다 —
@@ -33,9 +33,11 @@ export default function DetailInfo({ value, onChange }) {
     <Section title="① 지금 상태를 대충만 알려주세요"
       subtitle="정확하지 않아도 돼요. 얼마나 늘리고 줄여야하는지를 볼거에요.">
       {/* 부채는 이 한 칸이 전부다. 상환액·만기를 쪼개 묻지 않는다 — 잣대가 잔액에서 알아서 환산한다. */}
-      <Pills label="갖고 있는 대출이 어느 정도예요?" hint="마이너스통장은 약정 한도로 보는 게 안전해요. "
+      {/* <Pills label="갖고 있는 대출이 어느 정도예요?" hint="마이너스통장은 약정 한도로 보는 게 안전해요. "
         options={LEVER.debtPills.map((v, i, arr) => [manLabel(v) + (i === arr.length - 1 ? " 이상" : ""), v])}
-        value={value.debt} onPick={(v) => onChange({ ...value, debt: v })} />
+        value={value.debt} onPick={(v) => onChange({ ...value, debt: v })} /> */}
+      <Slider label="대출" value={value.debt} min={0} max={30000} step={100} onChange={(v) => onChange({ ...value, debt: v })} display={won(value.debt) + "원"} />
+      
 
       <div style={{ paddingTop: 12, borderTop: `1px solid ${C.line}` }}>
         <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 2 }}>소득의 유형을 반영해요 <span style={{ color: C.greenDeep }}>(중요해요)</span></div>

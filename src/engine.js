@@ -1,7 +1,7 @@
 /* 계산 로직 한 곳. 화면(JSX)을 넣지 말 것.
    여러 페이지가 여기서만 import 한다 — 파일마다 다시 정의하면 규칙이 갈라진다.
    역할 분담: 상품 '규칙 데이터'는 src/products/*, 그 데이터를 읽는 '판정·계산'은 여기. */
-import { RULE, AMBER_BAND, PRODUCTS, SPOUSE_INCOME_BANDS, INCOME_EDGE_MARGIN, ESTIMATED_DEBT_RATE, DIDIMDOL_DTI } from "./data.js";
+import { RULE, AMBER_BAND, PRODUCTS, SPOUSE_INCOME_BANDS, INCOME_EDGE_MARGIN, ESTIMATED_DEBT_RATE, DIDIMDOL_LOAN_RATE, DIDIMDOL_DTI } from "./data.js";
 import { PRODUCT_RULES, NEWBORN_RULE, NEWLYWED_YEARS, WEDDING_SOON_MONTHS } from "./products/index.js";
 
 /* ── 포맷 ── */
@@ -61,6 +61,11 @@ const annuityFactor = (annualRate, years) => {
   return (Math.pow(1 + r, n) - 1) / (r * Math.pow(1 + r, n));
 };
 
+/* 위의 역방향 — 원금이 정해졌을 때의 '연 원리금상환액'(원리금균등).
+   한도 역산이 아니라, 확정된 대출액에서 DTI 분자 ①을 만들 때 쓴다. */
+export const annualPayment = (principal, annualRate, years) =>
+  (num(principal) / annuityFactor(annualRate, years)) * 12;
+
 /* 은행(DSR) 잣대 — 기존 부채를 '원리금 전체'로 보고 소득에서 뺀다.
    ⚠️ 디딤돌은 이 함수를 쓰지 않는다(디딤돌은 아래 didimdolDtiLimit). 두 식을 다시 합치지 말 것.
    지금 쓰는 곳: 예산 화면의 천장(App.jsx), 그리고 capacityModel이 fundDTI가 아닌 상품. */
@@ -70,22 +75,71 @@ export function repaymentCapacity(annualIncome, ratio, annualRate, years, existi
   return monthlyRoom * annuityFactor(annualRate, years);
 }
 
+/* ② 기존 부채가 DTI에서 먹는 연간 금액 = 이자만.
+   기타부채 = 주담대 제외 대출(현금서비스 포함) − 상환예정 전세자금대출 − 예적금담보대출.
+   MVP는 이 차감을 구분하지 않고 '기타 대출 잔액' 하나로 근사한다(상담역 확인 영역). */
+export const otherDebtInterest = (balance) => num(balance) * ESTIMATED_DEBT_RATE;
+
+/* 디딤돌 DTI 파라미터의 기본값 풀기 — Limit(역산)과 At(정산)이 같은 가정을 쓰게 한 곳에 모은다.
+   여기가 갈라지면 "한도는 3.8억인데 그 3.8억의 DTI는 63%" 같은 모순이 화면에 나온다. */
+const didimdolDtiOpts = (opts = {}) => ({
+  annualRate: opts.annualRate ?? DIDIMDOL_LOAN_RATE,   // ①의 금리(디딤돌 자체 금리)
+  years: opts.years ?? DIDIMDOL_DTI.years,             // 본건 산정만기 = 30년 강제 (data.js 한 곳)
+  dtiCap: opts.dtiCap ?? DIDIMDOL_DTI.cap,
+  /* TODO(①): MVP는 둘 다 0. 기금 주담대 중복 보유/상환예정 주담대를 다루게 되면
+     여기에 '연 원리금(만원)'을 넣는다 — 잔액이 아니라 연 원리금이다. 화면에서 묻지는 않는다.
+     상환예정을 뺀 순액. 음수면 0 — 상환예정이 한도를 늘려주진 않는다. */
+  otherMortgageAnnual: Math.max(num(opts.otherFundLoanAnnual) - num(opts.repayingMortgageAnnual), 0),
+});
+
 /* 디딤돌(DTI) 잣대 — 은행 DSR과 식 자체가 다르다. 그래서 함수를 따로 둔다.
-     DTI(%) = ( ① 디딤돌 자체의 연간 원리금 + ② 기타부채 이자 ) / 연소득 × 100
-   여기서 구하는 건 ①에 쓸 수 있는 여유분에서 역산한 '디딤돌 최대 대출원금'이다.
-     ② 기타부채이자 = 잔액 × ESTIMATED_DEBT_RATE(추정금리)
-        DTI가 기존 부채에서 보는 건 이자뿐이다 — 원금 상환 스케줄(월상환액·산정만기)은 보지 않는다.
-        그래서 사용자에게도 '잔액'만 물으면 된다. 은행 DSR용 annualDebtService를 여기 쓰면 안 된다.
+     DTI(%) = ( ① 주담대 연간 원리금상환액 + ② 기타부채 연간 이자상환 추정액 ) / 연소득 × 100
+
+   ① = 본건 디딤돌 원리금(원리금균등·만기 DIDIMDOL_DTI.years·DIDIMDOL_LOAN_RATE)
+        + 동일 금융기관 실행예정 기금주담대 + 기존 기금주담대 − 상환예정 주담대
+     ↳ MVP는 본건만 계산한다. 나머지 세 항은 opts로 열려 있고 기본값이 0이다.
+   ② = 잔액 × ESTIMATED_DEBT_RATE. 기존 부채에서 보는 건 이자뿐이다 —
+        원금 상환 스케줄(월상환액·산정만기)은 보지 않는다. 그래서 사용자에게도 '잔액'만 물으면 된다.
+        은행 DSR용 annualDebtService를 여기 쓰면 안 된다.
+
+   ⚠️ 두 금리는 다른 값이다: ①은 DIDIMDOL_LOAN_RATE(디딤돌 자체 금리),
+      ②는 ESTIMATED_DEBT_RATE(한국은행 고시 기준 추정금리). 하나로 합치지 말 것.
+
+   ⚠️ 본건 대출액(didimdolAmount)을 **인자로 받지 않는다** — 받으면 순환이다.
+      본건 대출액 = Min(LTV, DTI, cap)인데 그 DTI가 다시 본건 대출액을 필요로 하기 때문.
+      대신 "본건 원리금이 DTI 여유분을 정확히 다 채우는 원금"을 PMT로 역산한다.
+      즉 여기서 나온 한도에는 ①(본건 원리금)이 이미 반영돼 있다.
+      확정된 대출액에서 실제 DTI·월 원리금을 보고 싶으면 아래 didimdolDtiAt을 쓴다(역방향).
+
    otherDebtBalance = 갖고 있는 대출 잔액 합계(만원). 부채 레버 값이 그대로 들어온다. */
-export function didimdolDtiLimit(annualIncome, otherDebtBalance, annualRate, years = DIDIMDOL_DTI.years, dtiCap = DIDIMDOL_DTI.cap) {
-  const allowedAnnual = num(annualIncome) * dtiCap;                     // DTI상한 소득
-  const roomAnnual = allowedAnnual - otherDebtInterest(otherDebtBalance); // ①에 쓸 수 있는 연 원리금
+export function didimdolDtiLimit(annualIncome, otherDebtBalance, opts = {}) {
+  const { annualRate, years, dtiCap, otherMortgageAnnual } = didimdolDtiOpts(opts);
+  const allowedAnnual = num(annualIncome) * dtiCap;                     // DTI상한이 허용하는 연 상환총액
+  const roomAnnual = allowedAnnual - otherDebtInterest(otherDebtBalance) - otherMortgageAnnual;
   if (roomAnnual <= 0) return 0;
-  return (roomAnnual / 12) * annuityFactor(annualRate, years);          // PMT 역산 → 최대 원금
+  return (roomAnnual / 12) * annuityFactor(annualRate, years);          // PMT 역산 → 본건 최대 원금
 }
 
-/* ② 기존 부채가 DTI에서 먹는 연간 금액 = 이자만. */
-export const otherDebtInterest = (balance) => num(balance) * ESTIMATED_DEBT_RATE;
+/* 역방향 — 본건 대출액이 확정됐을 때(= Min을 통과해 실제로 실행될 금액) 그 상태의 DTI를 정산한다.
+   디딤돌은 대개 cap이나 LTV가 먼저 걸려서 실행액이 didimdolDtiLimit보다 **낮다**.
+   그때 실제 DTI는 상한(60%)이 아니라 그보다 낮은 값이고, 그게 사용자가 봐야 할 숫자다.
+   레버(부채·소득)를 움직이면 한도가 안 움직이는 구간에서도 이 숫자는 움직인다 — 정직한 피드백.
+   ratio = null 은 '소득 0이라 판정 불가'. 0%와 구분해야 화면에서 거짓말이 안 된다. */
+export function didimdolDtiAt(didimdolAmount, annualIncome, otherDebtBalance, opts = {}) {
+  const { annualRate, years, dtiCap, otherMortgageAnnual } = didimdolDtiOpts(opts);
+  const ownAnnual = annualPayment(didimdolAmount, annualRate, years);   // ① 본건 디딤돌 연 원리금
+  const debtAnnual = otherDebtInterest(otherDebtBalance);               // ② 기타부채 연 이자
+  const totalAnnual = ownAnnual + otherMortgageAnnual + debtAnnual;
+  const income = num(annualIncome);
+  const ratio = income > 0 ? totalAnnual / income : null;
+  return {
+    ownAnnual, ownMonthly: ownAnnual / 12,   // 본건 원리금 (연/월)
+    debtAnnual, otherMortgageAnnual, totalAnnual,
+    ratio, cap: dtiCap, years, rate: annualRate,
+    /* 여유: DTI상한까지 연 상환액을 얼마나 더 얹을 수 있나(만원). 0이면 DTI가 벽이라는 뜻. */
+    roomAnnual: Math.max(income * dtiCap - totalAnnual, 0),
+  };
+}
 
 /* 지도·목록의 초록/노랑/회색 판정. 부채 0을 가정한 '천장' 기준이다. */
 export function evaluate(unit, dsrCap, cash) {
@@ -105,7 +159,10 @@ export function evaluate(unit, dsrCap, cash) {
    debt = 레버에서 온 raw 부채 { balance, view } (만원). null이면 무부채(천장 잣대).
    받는 건 잔액 하나뿐이고, 그걸 이자로 볼지 원리금으로 볼지는 잣대가 정한다.
    상환능력을 어떤 식으로 볼지는 상품 데이터(PRODUCTS[key].capacityModel)가 정한다 —
-   여기서 productKey로 분기하지 말 것. fundDTI = 디딤돌 DTI식 / 그 외 = 은행 DSR식(보수적 기본값). */
+   여기서 productKey로 분기하지 말 것. fundDTI = 디딤돌 DTI식 / 그 외 = 은행 DSR식(보수적 기본값).
+
+   돌려주는 dti = 디딤돌 계열일 때만 채워지는 '확정 대출액 기준 DTI 정산'(그 외 null).
+   한도(Min)를 먼저 정한 다음 그 금액으로 다시 계산한다 — 순서가 뒤집히면 순환이 된다. */
 export function limitParts(p, price, income, debt = null, capOverride = null) {
   const ltv = Math.max(price * p.LTV - (p.offsetsRoomDeduction ? 0 : RULE.roomDeduction), 0);
   const balance = debt?.balance ?? 0;
@@ -114,7 +171,7 @@ export function limitParts(p, price, income, debt = null, capOverride = null) {
   const fund = p.capacityModel === "fundDTI";
   const existingAnnual = fund ? otherDebtInterest(balance) : annualDebtService(balance, debt?.view);
   const capacity = fund
-    ? didimdolDtiLimit(income, balance, p.calcRate)
+    ? didimdolDtiLimit(income, balance)   // 금리·만기·DTI상한은 data.js의 디딤돌 파라미터가 정한다
     : repaymentCapacity(income, p.ratio, p.calcRate, 30, existingAnnual);
 
   const parts = [
@@ -123,7 +180,11 @@ export function limitParts(p, price, income, debt = null, capOverride = null) {
     { key: "cap", label: "정책상 최대한도", value: capOverride ?? p.cap },
   ];
   const binding = parts.reduce((a, b) => (b.value < a.value ? b : a));
-  return { limit: Math.max(binding.value, 0), parts, binding, existingAnnual };
+  const limit = Math.max(binding.value, 0);
+
+  /* 여기서 비로소 본건 원리금이 '숫자'가 된다 — 한도를 만든 뒤 그 한도로 되짚는 방향.
+     레버가 한도를 못 움직이는 구간(cap·LTV가 벽)에서도 이 값은 살아 움직인다. */
+  return { limit, parts, binding, existingAnnual, dti: fund ? didimdolDtiAt(limit, income, balance) : null };
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

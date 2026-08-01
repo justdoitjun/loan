@@ -15,7 +15,7 @@ import { useState } from "react";
 import { PRODUCTS, LEVER, C } from "./data.js";
 import { deriveFacts, judgeAll, withAssumedIncome, incomeTrust, won, eok } from "./engine.js";
 import { limitAt, ceilingAt, debtToReach, incomeToReach } from "./products/limit.js";
-import { BackButton, ContextSummary, Section, Placeholder, Block, Stat, useTween, eyebrow, h1, card, fine } from "./ui.jsx";
+import { BackButton, Slider, ContextSummary, Section, Placeholder, Block, Stat, useTween, eyebrow, h1, card, fine } from "./ui.jsx";
 import DetailInfo, { detailReady, TrustBadge } from "./DetailInfo.jsx";
 
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
@@ -173,6 +173,10 @@ function Cockpit({ ctx, passed, picked, onPickOther, lever, base, target, income
               </div>
             );
           })}
+
+          {/* 디딤돌 계열에서만 채워진다 — 이 금액을 실제로 받았을 때의 월 원리금과 DTI 정산.
+              한도가 cap·LTV에 걸려 안 움직이는 구간에서도 이 두 숫자는 레버를 따라 움직인다. */}
+          {reach.dti && <DtiLine dti={reach.dti} />}
         </div>
         {reached && trust === "warn" && (
           <div style={{ marginTop: 10 }}><TrustBadge trust="warn" compact /></div>
@@ -275,6 +279,35 @@ function Cockpit({ ctx, passed, picked, onPickOther, lever, base, target, income
       <Block title="창구에서 이렇게 물어보세요" items={P.guide.ask} />
       <Block title="애매할 때 대처" items={P.guide.fallback} /> */}
     </>
+  );
+}
+
+/* ── 본건 원리금 · DTI 정산 (디딤돌 계열 전용) ──
+   "얼마 나오나"만이 아니라 "그럼 매달 얼마고, 내 DTI는 몇 %인가"까지 같이 봐야
+   창구에서 예습이 된다. 이 줄은 engine.didimdolDtiAt이 계산한 값을 그리기만 한다.
+   ⚠️ 가드레일 1 — 확정 상환액이 아니라 가정(만기·금리)에 따른 추정이다. 가정을 같이 적는다. */
+function DtiLine({ dti }) {
+  if (dti.ratio == null) return null;
+  const pct = dti.ratio * 100, capPct = dti.cap * 100;
+  const tight = dti.ratio >= dti.cap - 0.02;        // DTI가 벽에 붙은 상태
+  const color = tight ? C.amber : C.greenDeep;
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${C.line}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 13 }}>
+        <span style={{ color: C.inkSoft }}>이 금액이면 매달 <b style={{ color: C.ink }}>약 {won(dti.ownMonthly)}원</b></span>
+        <span style={{ fontWeight: 800, color, fontVariantNumeric: "tabular-nums" }}>DTI 약 {pct.toFixed(0)}%</span>
+      </div>
+      <div style={{ position: "relative", height: 6, borderRadius: 3, background: "#EDF1ED", marginTop: 7, overflow: "hidden" }}>
+        <div className="gauge-fill" style={{ position: "absolute", inset: 0, right: "auto", width: `${clamp(pct / capPct, 0, 1) * 100}%`, background: color }} />
+      </div>
+      <div style={{ fontSize: 11, color: "#9AA3A0", lineHeight: 1.6, marginTop: 5 }}>
+        상한 {capPct.toFixed(0)}% 기준 · 본건은 만기 {dti.years}년·연 {(dti.rate * 100).toFixed(1)}% 원리금균등으로 계산해요(실제 만기와 무관한 산정 기준이에요).
+        {dti.debtAnnual > 0 && <> 여기에 기존 대출 이자 약 연 {won(dti.debtAnnual)}원이 같이 잡혀요.</>}
+        {tight
+          ? <> <b style={{ color: "#9A6B12" }}>지금은 DTI가 벽이에요</b> — 부채를 줄이거나 인정소득이 오르면 이 칸이 열려요.</>
+          : <> 상한까지 연 약 {won(dti.roomAnnual)}원 여유가 있어요.</>}
+      </div>
+    </div>
   );
 }
 

@@ -50,7 +50,7 @@ export const DIDIMDOL_RULES = [
     requires: [
       { flags: ["noHome"], label: "무주택" },
       { flags: ["firstTime"], label: "생애최초" },
-      { flags: [["newlywed", "weddingSoon"]], label: "혼인 7년 이내 또는 결혼예정 3개월 이내" },
+      { flags: [["newlywed", "planned"]], label: "혼인 7년 이내 또는 결혼예정 3개월 이내" },
     ],
     incomeCap: [{ when: [], value: 8500, label: "생애최초 신혼" }],
     priceCap: [{ when: [], value: 60000, label: "생애최초 신혼" }],
