@@ -73,14 +73,9 @@ export default function Strategy({ ctx, pickedKey, onPickOther, detail, setDetai
 
       <DetailInfo value={detail} onChange={onDetail} />
 
-      {!ready ? (
-        <Section title="② 레버" subtitle="위 세 칸을 채우면 레버가 나타나요.">
-          <Placeholder>
-            채우고 나면 <b>부채 레버</b>와 <b>소득 레버</b>가 열려요. 당기면 이 집까지의 거리가 실시간으로 좁혀지고,
-            어디까지 당겨야 닿는지를 <b>“기존 대출 약 얼마 일부상환”</b> 같은 실제 행동으로 번역해 드려요.
-          </Placeholder>
-        </Section>
-      ) : (
+      {/* 부채 확정 + 소득의 질 답변 전까지는 이 아래로 아무것도 안 보인다(가드레일과 무관하게
+          의도된 진행 방식) — ①에서 확정하기 전에는 레버도, 천장도, 순위도 존재하지 않는 것처럼 다룬다. */}
+      {ready && (
         <Cockpit
           ctx={ctx} passed={passed} picked={picked} onPickOther={onPickOther}
           lever={lever} base={base} target={target}

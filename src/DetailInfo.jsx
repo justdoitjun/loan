@@ -6,50 +6,74 @@
    여기서 받은 값은 Strategy의 레버 초기값이 되고, 사용자는 곧바로 그걸 당겨서 움직인다.
 
    원칙: 여기서는 raw 값만 받는다. 해석(DTI/DSR 잣대)은 products/limit.js가 한다.
-   ⚠️ 자격은 여기서 절대 묻지 않는다. 자격 질문이 필요하면 Eligibility에 추가할 것. */
-import { LEVER, C } from "./data.js";
-import { incomeTrust, won } from "./engine.js";
-import { Section, Slider, Pills, Choice } from "./ui.jsx";
+   ⚠️ 자격은 여기서 절대 묻지 않는다. 자격 질문이 필요하면 Eligibility에 추가할 것.
 
-/* 아직 아무것도 안 받은 상태. debt가 null이면 조종간은 레버를 아직 못 그린다(첫 박자 대기).
-   debt = 갖고 있는 대출 '잔액 합계'(만원) 하나. 월상환액은 묻지 않는다 —
-   디딤돌 DTI는 잔액의 이자만 보고, 은행 DSR도 같은 잔액에서 출발한다. */
-export const EMPTY_DETAIL = { debt: null, incomeQuality: { type: null, stable: null } };
+   진행 방식: 이 페이지에 처음 들어오면 부채 슬라이더 하나만 활성화돼 있다.
+   슬라이더는 0(왼쪽 끝)에서 시작 — 무부채도 유효한 답이라 굳이 안 만지고 넘어갈 수 있다.
+   "확정"을 눌러야 그 값이 잠기고, 그제서야 소득의 질 질문이 열린다(slideup).
+   Strategy의 레버 이하 섹션들은 이 확정 + 소득의 질 답변이 다 끝나야 나타난다(detailReady).
+   확정 없이 슬라이더 값만으로 다음 질문을 여는 걸 일부러 막았다 — 애매하게 넘어가지 않고
+   "이 금액으로 본다"는 걸 사용자가 한 번은 분명히 짚고 넘어가게 하기 위해서다. */
+import { C } from "./data.js";
+import { incomeTrust, won } from "./engine.js";
+import { Section, Slider, Choice, primaryBtn } from "./ui.jsx";
+
+/* 아직 아무것도 확정 안 한 상태. debt는 0(왼쪽 끝)에서 시작 — 무부채도 유효한 값이라
+   처음부터 실제 값으로 둔다("답 안 함"을 표현하는 건 아래 debtConfirmed의 역할이다).
+   debtConfirmed = 이 금액으로 보겠다고 사용자가 확정했는지. 이게 켜져야 소득 질문이 열린다. */
+export const EMPTY_DETAIL = { debt: 0, debtConfirmed: false, incomeQuality: { type: null, stable: null } };
 
 /* 이 컴포넌트의 산출물이 다 찼는지 = 레버를 그릴 수 있는지.
-   0도 유효한 답이라 != null로 본다(0을 '안 답함'으로 읽으면 무부채인 사람이 막힌다). */
-export const detailReady = (d) => d.debt != null && incomeTrust(d.incomeQuality) !== null;
-
-const manLabel = (v) => (v === 0 ? "없어요" : won(v));
+   부채는 값이 아니라 '확정 여부'로 본다 — 슬라이더를 만지작거리는 중간값으로 레버가 그려지면 안 된다. */
+export const detailReady = (d) => d.debtConfirmed === true && incomeTrust(d.incomeQuality) !== null;
 
 export default function DetailInfo({ value, onChange }) {
   const q = value.incomeQuality ?? { type: null, stable: null };
-
   const setQ = (k, v) => onChange({ ...value, incomeQuality: { ...q, [k]: v } });
-
   const trust = incomeTrust(q);
+
+  const confirmed = value.debtConfirmed === true;
+  const confirmDebt = () => onChange({ ...value, debtConfirmed: true });
+  const editDebt = () => onChange({ ...value, debtConfirmed: false });
 
   return (
     <Section title="① 지금 상태를 대충만 알려주세요"
       subtitle="정확하지 않아도 돼요. 얼마나 늘리고 줄여야하는지를 볼거에요.">
-      {/* 부채는 이 한 칸이 전부다. 상환액·만기를 쪼개 묻지 않는다 — 잣대가 잔액에서 알아서 환산한다. */}
-      {/* <Pills label="갖고 있는 대출이 어느 정도예요?" hint="마이너스통장은 약정 한도로 보는 게 안전해요. "
-        options={LEVER.debtPills.map((v, i, arr) => [manLabel(v) + (i === arr.length - 1 ? " 이상" : ""), v])}
-        value={value.debt} onPick={(v) => onChange({ ...value, debt: v })} /> */}
-      <Slider label="대출" value={value.debt} min={0} max={30000} step={100} onChange={(v) => onChange({ ...value, debt: v })} display={won(value.debt) + "원"} />
-      
 
-      <div style={{ paddingTop: 12, borderTop: `1px solid ${C.line}` }}>
-        <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 2 }}>소득의 유형을 반영해요 <span style={{ color: C.greenDeep }}>(중요해요)</span></div>
-        <div style={{ fontSize: 12, color: "#9AA3A0", marginBottom: 9, lineHeight: 1.55 }}>
-          금액만큼 중요한 게 “지금도 인정되는 소득인가”예요. 같은 5천만원도 근로·재직이면 거의 그대로 잡히고, 프리랜서·이직 직후면 깎여서 잡힐 수 있어요.
+      {/* 부채는 이 한 칸이 전부다. 상환액·만기를 쪼개 묻지 않는다 — 잣대가 잔액에서 알아서 환산한다. */}
+      {confirmed ? (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 12, background: "#F7FAF7", border: `1px solid ${C.line}` }}>
+          <div>
+            <div style={{ fontSize: 12, color: C.inkSoft, marginBottom: 2 }}>확정한 대출</div>
+            <div style={{ fontSize: 16, fontWeight: 800 }}>{value.debt === 0 ? "없어요" : won(value.debt) + "원"}</div>
+          </div>
+          <button onClick={editDebt} style={{ flex: "0 0 auto", padding: "8px 13px", borderRadius: 10, border: `1.5px solid ${C.line}`, background: "#fff", color: C.inkSoft, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            다시 정하기
+          </button>
         </div>
-        <Choice label="소득 유형" options={[["근로", "work"], ["사업", "business"], ["프리랜서", "freelance"]]}
-          value={q.type} onPick={(v) => setQ("type", v)} />
-        <Choice label="지금 상태" options={[["재직·유지 2개월+", true], ["이직·휴직·최근입사", false]]}
-          value={q.stable} onPick={(v) => setQ("stable", v)} />
-        {trust && <TrustBadge trust={trust} />}
-      </div>
+      ) : (
+        <>
+          <Slider label="대출" value={value.debt} min={0} max={30000} step={100}
+            onChange={(v) => onChange({ ...value, debt: v })} display={won(value.debt) + "원"} />
+          <button onClick={confirmDebt} style={primaryBtn}>
+            {value.debt === 0 ? "대출 없이 확정할게요" : `약 ${won(value.debt)}원으로 확정할게요`}
+          </button>
+        </>
+      )}
+
+      {confirmed && (
+        <div className="slideup" style={{ paddingTop: 12, marginTop: 12, borderTop: `1px solid ${C.line}` }}>
+          <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 2 }}>소득의 유형을 반영해요 <span style={{ color: C.greenDeep }}>(중요해요)</span></div>
+          <div style={{ fontSize: 12, color: "#9AA3A0", marginBottom: 9, lineHeight: 1.55 }}>
+            금액만큼 중요한 게 “지금도 인정되는 소득인가”예요. 같은 5천만원도 근로·재직이면 거의 그대로 잡히고, 프리랜서·이직 직후면 깎여서 잡힐 수 있어요.
+          </div>
+          <Choice label="소득 유형" options={[["근로", "work"], ["사업", "business"], ["프리랜서", "freelance"]]}
+            value={q.type} onPick={(v) => setQ("type", v)} />
+          <Choice label="지금 상태" options={[["재직·유지 2개월+", true], ["이직·휴직·최근입사", false]]}
+            value={q.stable} onPick={(v) => setQ("stable", v)} />
+          {trust && <TrustBadge trust={trust} />}
+        </div>
+      )}
     </Section>
   );
 }

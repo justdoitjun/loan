@@ -241,8 +241,11 @@ export function deriveFacts(ctx) {
   const planned = ctx.marital === "planned";
   const single = ctx.marital === "single";
 
+  /* 신혼 판정은 '혼인신고 7년 이내' 버킷이 1차 출처다 — 화면이 날짜 대신 버킷으로 묻기 때문.
+     marriedDate는 정밀 확인이 필요해질 때를 위해 열어둔 보조 경로다(지금 화면에선 안 받는다).
+     둘 중 하나라도 7년 이내면 신혼. 버킷이 false면 날짜가 없으므로 자연히 false다. */
   const marriageMonths = married && ctx.marriedDate ? monthsBetween(new Date(ctx.marriedDate), today) : null;
-  const withinNewlywed = marriageMonths !== null && marriageMonths <= NEWLYWED_YEARS * 12;
+  const withinNewlywed = married && (ctx.marriedWithin7 === true || (marriageMonths !== null && marriageMonths <= NEWLYWED_YEARS * 12));
 
   const weddingMonths = planned && ctx.weddingDate ? monthsBetween(today, new Date(ctx.weddingDate)) : null;
   const weddingSoon = weddingMonths !== null && weddingMonths >= 0 && weddingMonths <= WEDDING_SOON_MONTHS;
@@ -257,15 +260,17 @@ export function deriveFacts(ctx) {
     return withinYears && b >= newbornFloor;
   });
 
-  /* 기혼: 배우자 있음. 미혼: householdType="withDependent" && hasMiniDependents=true일 때만 부양가족 있음 */
-  const hasDependents = married || (single && ctx.householdType === "withDependent" && ctx.hasMiniDependents === true);
-  const sole = !married && !hasDependents;         // 단독세대주(부양가족 없음)
+  /* ⚠️ 세대주 여부는 화면에서 직접 묻지 않는다 — 가족정보(나이·배우자·자녀)에서만 추정한다.
+     등본상 실제 세대 구성은 우리가 알 수 없으므로 여기 나오는 건 전부 '후보 판정'이고,
+     화면은 그 결과에 노랑(상담역 확인) 안내를 붙여서 보여준다(가드레일 3). */
+  const hasDependents = married || minors > 0;     // 부양가족 = 배우자 또는 미성년 자녀
+  const sole = !married && !hasDependents;         // 단독세대주 후보(배우자·미성년 자녀 없음)
 
-  /* 미혼·결혼예정의 "부양가족 있음"은 배우자가 아니라 미성년 형제자매·직계존속이다.
-     세대주 자격: 기혼 || (30세 이상 미혼) || (30세 미만 미혼이면서 householdType 선택함)
-     householdType="notHeadOfHouse"는 이미 화면에서 차단됨. */
-  const adult30Plus = !married && age !== null && age >= 30;               // 30세 이상 미혼
-  const soleException30Under = single && age !== null && age < 30 && (ctx.householdType === "alone" || ctx.householdType === "withDependent");
+  /* 세대주 요건: 기혼 || (30세 이상, 배우자 없음) || (30세 미만인데 미성년 자녀를 부양)
+     만30세 미만 미혼의 "미성년 형제자매·직계존속 6개월 이상 부양" 예외는 묻지 않는다 →
+     이 경우 요건이 안 잡힌 채로 나가고, 화면이 "상담역이 등본으로 확인" 경로를 안내한다. */
+  const adult30Plus = !married && age !== null && age >= 30;               // 30세 이상, 배우자 없음
+  const soleException30Under = single && age !== null && age < 30 && minors > 0;
   const householdHead = married || adult30Plus || soleException30Under;    // 세대주 요건(자격 게이트)
   /* tier는 게이트보다 좁다 — 부양이 있으면 게이트는 통과해도 tier에선 빠진다(일반가구 기준 적용). */
   const adult30SoleSingle = single && age !== null && age >= 30 && sole;   // 30세 이상 미혼 단독세대주
