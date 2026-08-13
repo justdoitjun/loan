@@ -33,7 +33,7 @@ export default function Strategy({ ctx, pickedKey, onPickOther, detail, setDetai
     return (
       <div className="slideup">
         <BackButton onClick={onBack}>자격 조건으로</BackButton>
-        <div style={{ ...card, color: C.inkSoft, fontSize: 14, lineHeight: 1.6 }}>조건이 바뀌어서 지금 열리는 상품이 없어요. 앞 화면에서 자격 답변을 다시 확인해주세요.</div>
+        <div style={{ ...card, color: C.inkSoft, fontSize: 14, lineHeight: 1.6 }}>조건이 바뀌어서 지금 열리는 대출이 없어요. 앞 화면에서 자격 답변을 다시 확인해주세요.</div>
       </div>
     );
   }
@@ -62,8 +62,8 @@ export default function Strategy({ ctx, pickedKey, onPickOther, detail, setDetai
 
   return (
     <div className="slideup">
-      <BackButton onClick={onBack}>가능한 상품 목록으로</BackButton>
-      <div style={eyebrow}>조종간</div>
+      <BackButton onClick={onBack}>가능한 대출 목록으로</BackButton>
+      <div style={eyebrow}>함께 전략을 짜봐요</div>
       <h1 style={h1}>{picked.title}으로<br />이 집에 닿는 길을 찾아요.</h1>
       <p style={{ fontSize: 13, color: C.inkSoft, margin: "0 0 16px", lineHeight: 1.6 }}>
         여기 숫자는 고정된 판정이 아니에요. <b style={{ color: C.ink }}>레버를 당기면 움직입니다</b> — 어디까지 움직이는지, 그리고 어디서부터는 안 움직이는지를 같이 보여드려요.
@@ -185,7 +185,7 @@ function Cockpit({ ctx, passed, picked, onPickOther, lever, base, target, income
       {/* ── ② 레버 ── */}
       <Section title="③ 레버 두 개" tone={leversInert ? "off" : pulled ? undefined : "ok"}
         subtitle={leversInert
-          ? "먼저 정직하게 말씀드릴 게 있어요 — 이 경로에선 레버가 결과를 못 움직여요."
+          ? "먼저 정직하게 말씀드릴 게 있어요 — 이 대출에선 레버가 결과를 못 움직여요."
           : pulled ? "당긴 만큼 위 거리가 움직여요. 되돌리려면 아래 '원래대로'를 누르세요."
           : `손잡이를 잡고 당겨보세요. 지금 레버로 더 열 수 있는 폭은 약 ${won(leverRoom)}원이에요.`}>
 
@@ -193,7 +193,7 @@ function Cockpit({ ctx, passed, picked, onPickOther, lever, base, target, income
         <div style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 16, padding: "11px 13px", borderRadius: 11, background: "#F1F3F1", border: `1px solid ${C.greyDot}`, color: C.inkSoft }}>
            <b style={{ color: C.ink }}>{ceil.binding.label}</b>({won(ceil.binding.value)})이에요. <br/>
            <b style={{ color: C.ink }}>부채를 갚아도, 소득이 올라도 이 금액이 최대에요.</b>
-          {reached ? " (지금 이미 목표에 닿아 있으니 급하지 않아요)." : "(차액을 현금으로 채우는 길, 그리고 한도가 더 큰 다른 경로)."}
+          {reached ? " (지금 이미 목표에 닿아 있으니 급하지 않아요)." : "(차액을 현금으로 채우는 길, 그리고 한도가 더 큰 다른 대출)."}
           <br />
         </div>
       )}
@@ -219,7 +219,7 @@ function Cockpit({ ctx, passed, picked, onPickOther, lever, base, target, income
           <div style={{ fontSize: 12, color: "#9AA3A0", lineHeight: 1.6, marginTop: 8 }}>
             {P.capacityModel === "fundDTI"
               ? <>{P.name}은 DTI로 보기 때문에 기존 대출에서 <b>이자만</b> 잡혀요 — 잔액 × 추정금리가 상환능력에서 빠져요.
-                  그래서 <b>잔액을 줄이면</b> 그만큼 열려요(월 얼마씩 갚는지는 이 상품 계산에 안 들어가요).</>
+                  그래서 <b>잔액을 줄이면</b> 그만큼 열려요(월 얼마씩 갚는지는 이 대출 계산에 안 들어가요).</>
               : <>{P.name}은 기존 대출을 <b>원리금</b>으로 봐요(가정 금리·만기 기준 근사). 그래서 잔액을 줄이면 상환능력 칸이 그만큼 열려요.</>}
           </div>
         </div>
@@ -239,13 +239,13 @@ function Cockpit({ ctx, passed, picked, onPickOther, lever, base, target, income
               hint={!pulled && !leversInert && base.debt === 0} onChange={(v) => pullLever("income", v)} />
           ) : (
             <div style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.6, marginBottom: 10 }}>
-              이 경로는 합산소득 <b>{won(incomeCap)}원</b>이 자격 상한이에요({picked.income.label}). 지금 소득이 이미 그 근처라 <b>소득 레버는 올릴 데가 없어요</b> —
+              이 대출은 합산소득 <b>{won(incomeCap)}원</b>이 자격 상한이에요({picked.income.label}). 지금 소득이 이미 그 근처라 <b>소득 레버는 올릴 데가 없어요</b> —
               더 올리면 한도가 아니라 <b>자격이 닫혀요</b>.
             </div>
           )}
           {trust && <TrustBadge trust={trust} compact />}
           <div style={{ fontSize: 12, color: "#9AA3A0", lineHeight: 1.6, marginTop: 8 }}>
-            소득 레버는 <b>{won(incomeCap)}원</b>({picked.income.label})에서 멈춰요{hasSpouse ? "(부부합산 기준)" : ""}. 그 위는 한도가 늘어나는 게 아니라 이 상품 자격에서 빠져요.
+            소득 레버는 <b>{won(incomeCap)}원</b>({picked.income.label})에서 멈춰요{hasSpouse ? "(부부합산 기준)" : ""}. 그 위는 한도가 늘어나는 게 아니라 이 대출 자격에서 빠져요.
           </div>
         </div>
 
@@ -421,7 +421,7 @@ function Translate({ reached, trust, gap, overCeiling, lever, base, hasSpouse, d
           hasSpouse
             ? "배우자 소득을 합산하면 상환능력 한도가 얼마까지 올라가는지 확인 부탁드립니다."
             : "상여·수당이 인정소득에 포함되면 상환능력 한도가 얼마까지 올라가는지 확인 부탁드립니다.",
-          `소득이 ${won(incomeCap)}원을 넘으면 이 상품 자격에서 빠지는지도 같이 확인해 주세요.`],
+          `소득이 ${won(incomeCap)}원을 넘으면 이 대출 자격에서 빠지는지도 같이 확인해 주세요.`],
   });
 
   return (
@@ -463,13 +463,13 @@ function Ceiling({ ceil, target, reach, overCeiling, base, incomeMax, incomeCap,
       </div>
       <div style={{ fontSize: 13, lineHeight: 1.7, color: overCeiling ? "#9A6B12" : C.inkSoft }}>
         {overCeiling
-          ? <><b>레버를 끝까지 당겨도 이 집까지 약 {won(target - ceil.limit)}원 모자라요.</b> 부채를 다 갚고 소득이 자격 상한까지 인정돼도요 — 그래서 “이 집은 지금 무리”라고 말씀드리는 게 맞아요. 대신 위 <b>차액을 현금으로 채우는 길</b>과 아래 <b>다른 상품</b>은 아직 열려 있어요.</>
+          ? <><b>레버를 끝까지 당겨도 이 집까지 약 {won(target - ceil.limit)}원 모자라요.</b> 부채를 다 갚고 소득이 자격 상한까지 인정돼도요 — 그래서 “이 집은 지금 무리”라고 말씀드리는 게 맞아요. 대신 위 <b>차액을 현금으로 채우는 길</b>과 아래 <b>다른 대출</b>은 아직 열려 있어요.</>
           : <>이 집(약 {won(target)}원)은 천장 <b>안쪽</b>이에요. 레버를 당기면 닿는 범위라는 뜻이에요{reach >= target ? " — 이미 닿아 있어요." : "."}</>}
       </div>
       <div style={{ fontSize: 12, color: "#9AA3A0", lineHeight: 1.65, marginTop: 9, paddingTop: 9, borderTop: `1px solid ${C.line}` }}>
         천장을 만드는 벽: <b style={{ color: C.inkSoft }}>{wall}</b> ({won(ceil.binding.value)}).
         {ceil.binding.key === "ltv" && " 담보 벽은 부채를 다 갚아도, 소득이 올라도 안 내려가요. 시세와 방공제로 정해지는 값이에요."}
-        {ceil.binding.key === "cap" && ` ${productName}의 경로 한도가 벽이라, 더 큰 한도의 경로로 갈아타는 게 유일한 길이에요.`}
+        {ceil.binding.key === "cap" && ` ${productName}의 한도가 벽이라, 더 큰 한도의 대출로 갈아타는 게 유일한 길이에요.`}
         {ceil.binding.key === "dti" && ` 소득 레버 상한(${won(incomeMax)}, 자격 상한 ${won(incomeCap)})까지 올린 값이에요. 부채는 0으로 가정했어요(원래 ${won(base.debt)}).`}
       </div>
     </Section>
@@ -481,7 +481,7 @@ function Ceiling({ ceil, target, reach, overCeiling, base, incomeMax, incomeCap,
 function Ranked({ ranked, closedByLever, better, picked, lever, target, reached, reachLimit, onPickOther }) {
   if (ranked.length === 0) return null;
   return (
-    <Section title="⑥ 레버를 당긴 지금, 어떤 상품이 유리한가" tone={better && !reached ? "ok" : undefined}
+    <Section title="⑥ 레버를 당긴 지금, 어떤 대출이 유리한가" tone={better && !reached ? "ok" : undefined}
       subtitle="자격이 됐던 것들을 지금 레버 상태로 다시 세웠어요. 눌러서 갈아탈 수 있어요.">
       {better && !reached && (
         <div style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 12, padding: "10px 12px", borderRadius: 10, background: "#F3F9F5", border: "1px solid #CFE6D9", color: C.greenDeep }}>
@@ -504,7 +504,7 @@ function Ranked({ ranked, closedByLever, better, picked, lever, target, reached,
             </div>
             <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 3, lineHeight: 1.6 }}>
               {p.rateLabel} · 실행 {p.leadTime} · {covers ? "이 레버 상태로 닿아요" : `약 ${won(target - p.at)}원 부족`}
-              {!covers && repay > 0 && <><br /><b style={{ color: C.greenDeep }}>약 {won(repay)}원 더 갚으면 이 경로도 닿아요.</b></>}
+              {!covers && repay > 0 && <><br /><b style={{ color: C.greenDeep }}>약 {won(repay)}원 더 갚으면 이 대출도 닿아요.</b></>}
             </div>
           </button>
         );

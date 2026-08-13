@@ -103,7 +103,7 @@ export function ContextSummary({ ctx }) {
     ["소득", `본인 ${won(ctx.ownIncome)} + 배우자 ${won(ctx.spouseIncome)} = 부부합산 약 ${won(ctx.totalIncome)}원`],
     ["가구", `${ctx.noHome ? "무주택" : "유주택"} · ${ctx.newlywed ? "신혼" : "신혼 아님"} · 미성년 ${ctx.minors}명`],
     ["필요 대출", `약 ${won(ctx.needed)}원 (보유 현금 ${won(ctx.cash)}원 제외)`],
-    ["추천 상품", ctx.recommended.name],
+    ["추천 대출", ctx.recommended.name],
   ];
   return (
     <div style={{ ...card, padding: "12px 16px", marginBottom: 16 }}>

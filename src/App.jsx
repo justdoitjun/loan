@@ -17,11 +17,16 @@ import { AppShell, BackButton, Slider, eyebrow, h1, card, primaryBtn, ghostBtn, 
 import Eligibility, { EMPTY_ELIG } from "./Eligibility.jsx";
 import Strategy from "./Strategy.jsx";
 import { EMPTY_DETAIL } from "./DetailInfo.jsx";
+import IncomeCheck, { EMPTY_INCOME_CHECK, incomeCheckResult } from "./IncomeCheck.jsx";
 
 export default function App() {
   const [step, setStep] = useState("budget");
-  const [income, setIncome] = useState(6500);
-  const [cash, setCash] = useState(25000);
+  /* 소득·현금도 부채 슬라이더와 같은 원칙 — 0(맨 왼쪽)에서 시작하고, 아직 "확정"은 안 된 상태.
+     budgetConfirmed가 켜지기 전엔 지도가 실제 색으로 안 물든다(아래 shellResults) —
+     리빌은 슬라이더를 만지작거리는 중이 아니라 "이걸로 볼게요"라고 확정한 순간 일어난다. */
+  const [income, setIncome] = useState(0);
+  const [cash, setCash] = useState(0);
+  const [budgetConfirmed, setBudgetConfirmed] = useState(false);
   const [selectedId, setSelectedId] = useState(null);  // 지도 인라인 상세
   const [modalUnit, setModalUnit] = useState(null);    // 정부/은행 선택 팝업
 
@@ -30,10 +35,19 @@ export default function App() {
   const [elig, setElig] = useState(EMPTY_ELIG);        // 자격 답변 — Eligibility에서만 채운다
   const [pickedKey, setPickedKey] = useState(null);    // 가능 목록에서 고른 상품(규칙 key)
   const [detail, setDetail] = useState(EMPTY_DETAIL);  // 부채·소득의 질 — Strategy에서만 채운다
+  /* 소득 신뢰도 자가진단 — IncomeCheck에서만 채운다. 매물·자격과 무관한 답변이라
+     step을 오가도(예산→목록→자격) 안 지운다. 결과는 incomeCheckResult(incomeCheck)로
+     아무 화면에서나 다시 읽을 수 있다 — "상위 상태로 전달"이 이 한 줄이다. */
+  const [incomeCheck, setIncomeCheck] = useState(EMPTY_INCOME_CHECK);
+  const incomeTrustResult = incomeCheckResult(incomeCheck); // null | { tone, type, notes }
 
   // 기존 대출 0을 가정한 '천장'. 부채는 상품을 고른 뒤 Strategy에서 받는다.
   const dsrCap = useMemo(() => repaymentCapacity(income, RULE.DSR, RULE.loanRate, RULE.loanYears, 0), [income]);
   const results = useMemo(() => DATA.map((d) => evaluate(d, dsrCap, cash)), [dsrCap, cash]);
+  /* 확정 전의 지도 — 실제 색 대신 회색 껍데기. 슬라이더를 옮기는 중엔 아직 안 보여주고,
+     "이 조건으로 알아볼게요"를 눌러야 비로소 켜진다(한 번의 리빌). */
+  const shellResults = useMemo(() => results.map((r) => ({ ...r, color: "grey" })), [results]);
+  const shownResults = budgetConfirmed ? results : shellResults;
   const greenCount = results.filter((r) => r.color === "green").length;
   const amberCount = results.filter((r) => r.color === "amber").length;
   const selected = results.find((r) => r.id === selectedId) || null;
@@ -59,7 +73,7 @@ export default function App() {
       {step === "budget" && (
         <>
           <div style={eyebrow}>노원구 · 그린라이트</div>
-          <h1 style={h1}>소득만 알려주면,<br />살 수 있는 집에 불이 들어와요.</h1>
+          <h1 style={h1}>내가 살 수 있는 집은?</h1>
           {/* <p style={{ fontSize: 13, color: C.inkSoft, margin: 0 }}>로그인도, 조회도 없어요. 입력값은 이 화면 밖으로 나가지 않아요.</p> */}
 
           {/* <div style={{ ...card, marginTop: 18 }}>
@@ -69,26 +83,46 @@ export default function App() {
             </div>
             <div style={{ fontSize: 13, color: C.inkSoft, marginTop: 6 }}>경계선 <b style={{ color: C.amber }}>{amberCount}곳</b> · 소득만 보면 최대 <b>{eok(maxLoan)}</b>까지</div>
             <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, lineHeight: 1.6 }}>
-              <b style={{ color: C.ink }}>기존 대출은 아직 안 뺐어요.</b> 지금 숫자는 대출이 하나도 없다고 봤을 때의 <b style={{ color: C.ink }}>천장</b>이에요. 부채가 있으면 여기서 내려가지만, 그걸로 문이 닫히진 않아요 — 상품을 고른 뒤에 함께 따져봐요.
+              <b style={{ color: C.ink }}>기존 대출은 아직 안 뺐어요.</b> 지금 숫자는 대출이 하나도 없다고 봤을 때의 <b style={{ color: C.ink }}>천장</b>이에요. 부채가 있으면 여기서 내려가지만, 그걸로 문이 닫히진 않아요 — 어떤 대출로 갈지 고른 뒤에 함께 따져봐요.
             </div>
           </div> */}
 
 
 
-          <Map results={results} selectedId={selectedId} onPick={setSelectedId} />
+          <Map results={shownResults} selectedId={selectedId} onPick={setSelectedId} />
           <Legend />
-                              <div style={{ marginTop: 16 }}>
-            <Slider label="나의 연소득" value={income} min={2000} max={12000} step={100} onChange={setIncome} display={won(income) + "원"} />
+          <div style={{ marginTop: 16 }}>
+            <Slider label="나의 연소득" value={income} min={0} max={12000} step={100} onChange={setIncome} display={won(income) + "원"} />
             <Slider label="보유 현금" value={cash} min={0} max={70000} step={500} onChange={setCash} display={won(cash) + "원"} />
           </div>
-          <div style={{ ...card, marginTop: 16, minHeight: 100, borderColor: selected ? COLOR_VALUE[selected.color] : C.line, transition: "border-color .3s" }}>
-            {!selected ? <div style={{ color: C.inkSoft, fontSize: 14, paddingTop: 6 }}>지도에서 단지를 눌러보세요. 당신 예산에서 어떻게 보이는지 알려드릴게요.</div> : <Detail r={selected} />}
-          </div>
 
+          <button onClick={() => setStep("incomeCheck")} style={{ ...ghostBtn, width: "100%", marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>내 소득, 그대로 인정될지 미리 확인해볼까요?</span>
+            <span style={{ fontSize: 12, fontWeight: 800, color: incomeTrustResult ? (incomeTrustResult.tone === "green" ? C.greenDeep : C.amber) : C.inkSoft }}>
+              {incomeTrustResult ? (incomeTrustResult.tone === "green" ? "확인함 · 초록" : "확인함 · 노랑") : "확인 안 함 →"}
+            </span>
+          </button>
 
+          {!budgetConfirmed ? (
+            <div style={{ ...card, marginTop: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.5 }}>
+                연소득 {won(income)}원 · 현금 {won(cash)}원 — 이 소득과 현금으로 알아볼까요?
+              </div>
+              <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 5, marginBottom: 13, lineHeight: 1.55 }}>
+                슬라이더를 옮겨서 맞추고 확인하면, 지도에 살 수 있는 집이 바로 켜져요.
+              </div>
+              <button onClick={() => setBudgetConfirmed(true)} style={primaryBtn}>네, 이걸로 알아볼게요</button>
+            </div>
+          ) : (
+            <>
+              <div style={{ ...card, marginTop: 16, minHeight: 100, borderColor: selected ? COLOR_VALUE[selected.color] : C.line, transition: "border-color .3s" }}>
+                {!selected ? <div style={{ color: C.inkSoft, fontSize: 14, paddingTop: 6 }}>지도에서 단지를 눌러보세요. 당신 예산에서 어떻게 보이는지 알려드릴게요.</div> : <Detail r={selected} />}
+              </div>
 
-          <button onClick={() => setStep("list")} style={primaryBtn}>가능한 매물목록 확인하기 →</button>
-          <p style={fine}>기존 대출을 0으로 둔 상한선이라 실제 한도는 이보다 낮게 나올 수 있어요. 실거래가 기반 근사치예요. 정확한 담보평가·대출 가부는 상담역이 확정합니다. 데이터·상품 규칙 일부는 예시값이에요. 이 화면은 대출을 약속하지 않아요.</p>
+              <button onClick={() => setStep("list")} style={primaryBtn}>가능한 매물목록 확인하기 →</button>
+              <p style={fine}>기존 대출을 0으로 둔 상한선이라 실제 한도는 이보다 낮게 나올 수 있어요. 실거래가 기반 근사치예요. 정확한 담보평가·대출 가부는 상담역이 확정합니다. 데이터·대출 규칙 일부는 예시값이에요. 이 화면은 대출을 약속하지 않아요.</p>
+            </>
+          )}
         </>
       )}
 
@@ -112,6 +146,10 @@ export default function App() {
             </button>
           ))}
         </div>
+      )}
+
+      {step === "incomeCheck" && (
+        <IncomeCheck value={incomeCheck} onChange={setIncomeCheck} onBack={() => setStep("budget")} />
       )}
 
       {step === "eligibility" && ctx && (
@@ -145,11 +183,11 @@ function ProductModal({ r, onPick, onClose }) {
         <div style={{ fontSize: 13, color: C.inkSoft }}>{r.dong} · 전용 {r.areaM2}㎡ · {won(r.price)}원</div>
         <div style={{ fontSize: 13, color: C.ink, margin: "14px 0 12px", fontWeight: 600 }}>어떤 대출로 알아볼까요?</div>
         <button onClick={() => onPick("gov")} style={{ ...modalOpt, borderColor: C.greenDeep }}>
-          <div style={{ fontSize: 15, fontWeight: 800 }}>정부상품 <span style={{ fontSize: 12, color: C.inkSoft, fontWeight: 600 }}>디딤돌·보금자리</span></div>
+          <div style={{ fontSize: 15, fontWeight: 800 }}>정부대출 <span style={{ fontSize: 12, color: C.inkSoft, fontWeight: 600 }}>디딤돌·보금자리</span></div>
           <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 3 }}>금리 낮음 · 한도 빡빡 · 실행 느림(약 2개월)</div>
         </button>
         <button onClick={() => onPick("bank")} style={modalOpt}>
-          <div style={{ fontSize: 15, fontWeight: 800 }}>은행상품 <span style={{ fontSize: 12, color: C.inkSoft, fontWeight: 600 }}>일반 주담대</span></div>
+          <div style={{ fontSize: 15, fontWeight: 800 }}>은행대출 <span style={{ fontSize: 12, color: C.inkSoft, fontWeight: 600 }}>일반 주담대</span></div>
           <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 3 }}>한도 넉넉 · 금리 높음 · 실행 빠름(약 2~4주)</div>
         </button>
         <button onClick={onClose} style={{ ...ghostBtn, width: "100%", marginTop: 10 }}>닫기</button>

@@ -20,6 +20,6 @@ export const BOGEUMJARI_RULES = [
       { when: [["newlywed", "twoPlusMinors", "hasNewborn"]], value: 40000, label: "우대" },
       { when: [], value: 36000, label: "기본" },
     ],
-    note: "소득·가격 문턱이 디딤돌보다 느슨하고 MCG로 방공제를 상쇄해요. 대신 금리가 높아요 — 디딤돌이 방공제·한도에서 막힐 때 채워주는 자리예요.",
+    note: "심사 조건은 간편하지만, 금리가 디딤돌보다 높아요. 방 공제를 보전받을 수 있단 장점도 있어요!",
   },
 ];

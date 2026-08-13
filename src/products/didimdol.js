@@ -43,7 +43,7 @@ export const DIDIMDOL_RULES = [
       { when: ["firstTime"], value: 30000, label: "생애최초" },
       { when: [], value: 25000, label: "기본" },
     ],
-    note: "가장 기본 경로예요. 우대 조건이 붙을수록 상한과 한도가 같이 올라가요.",
+    note: "가장 기본 대출이에요. 우대 조건이 붙을수록 상한과 한도가 같이 올라가요.",
   },
   {
     key: "firstNewlywed", product: "didimdol", name: "생애최초 신혼가구", enabled: true,
@@ -72,7 +72,7 @@ export const DIDIMDOL_RULES = [
     priceCap: [{ when: [], value: 90000, label: "신생아 특례" }],
     areaCap: null, // 면적 요건은 이번 데이터에 없음 → 검사하지 않는다
     loanCap: [{ when: [], value: 40000, label: "신생아 특례" }],
-    note: "소득 문턱이 가장 높은 경로예요. 아이 출생일이 기준이라 시점을 꼭 확인하세요.",
+    note: "소득 문턱이 가장 높은 대출이에요. 아이 출생일이 기준이라 시점을 꼭 확인하세요.",
   },
   {
     key: "youthDream", product: "didimdol", name: "청년 주택드림", enabled: true,
@@ -92,7 +92,7 @@ export const DIDIMDOL_RULES = [
       { when: ["newlywed"], value: 40000, label: "신혼" },
       { when: [], value: 30000, label: "미혼" },
     ],
-    note: "통장 연계가 전제예요. 통장이 없으면 이 경로는 안 열려요.",
+    note: "통장 연계가 전제예요. 통장이 없으면 이 대출은 안 열려요.",
   },
   {
     key: "jeonseVictim", product: "didimdol", name: "전세사기피해자 전용", enabled: false, // ✏️ MVP 제외. true로 바꾸면 판정에 포함된다.

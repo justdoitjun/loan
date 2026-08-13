@@ -128,7 +128,7 @@ export default function App() {
         {단계 === "budget" && (
           <>
             <div style={eyebrow}>노원구 · 그린라이트</div>
-            <h1 style={h1}>소득만 알려주면,<br />살 수 있는 집에 불이 들어와요.</h1>
+            <h1 style={h1}>내가 살 수 있는 집은?</h1>
             <p style={{ fontSize: 13, color: C.inkSoft, margin: 0 }}>로그인도, 조회도 없어요. 입력값은 이 화면 밖으로 나가지 않아요.</p>
 
             <div style={{ ...card, marginTop: 18 }}>
