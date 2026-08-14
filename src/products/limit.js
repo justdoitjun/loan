@@ -11,7 +11,7 @@
        debt       가정 대출 잔액 합계 (만원)  · 부채 레버
    부채는 '잔액' 하나뿐이다. 월상환액은 묻지도 넘기지도 않는다 —
    DTI는 잔액의 이자만 보고, DSR은 같은 잔액을 원리금으로 환산해서 본다.
-   돌려주는 것: { limit, parts, binding, existingAnnual } — limitParts와 같은 모양. */
+   돌려주는 것: { limit, parts, binding } — limitParts와 같은 모양. */
 import { PRODUCTS } from "../data.js";
 import { limitParts } from "../engine.js";
 
@@ -35,32 +35,4 @@ export function limitAt(productKey, lever, capOverride = null) {
    이 위 구간은 레버로도 지금은 무리다. 거짓 희망을 만들지 않기 위해 반드시 같이 그린다. */
 export function ceilingAt(productKey, lever, capOverride = null) {
   return limitAt(productKey, { ...lever, debt: 0, income: lever.incomeMax }, capOverride);
-}
-
-/* ── 행동 번역용 역산 ──────────────────────────────────────────────────────
-   한도는 부채에 대해 단조 감소, 소득에 대해 단조 증가라 이분탐색으로 충분하다.
-   Min(LTV, DTI, cap)이라 구간별로 꺾여도 단조성은 유지된다. */
-
-/* 목표에 닿으려면 대출 잔액을 얼마까지 줄여야 하나(만원). 0까지 줄여도 못 닿으면 null. */
-export function debtToReach(productKey, lever, capOverride, target) {
-  if (limitAt(productKey, lever, capOverride).limit >= target) return lever.debt; // 이미 닿아 있음
-  if (limitAt(productKey, { ...lever, debt: 0 }, capOverride).limit < target) return null;
-  let lo = 0, hi = lever.debt;   // lo = 닿는 쪽, hi = 못 닿는 쪽
-  for (let i = 0; i < 40 && hi - lo > 1; i++) {
-    const mid = (lo + hi) / 2;
-    if (limitAt(productKey, { ...lever, debt: mid }, capOverride).limit >= target) lo = mid; else hi = mid;
-  }
-  return lo;
-}
-
-/* 목표에 닿으려면 인정소득이 얼마여야 하나(만원). 소득상한까지 올려도 못 닿으면 null. */
-export function incomeToReach(productKey, lever, capOverride, target) {
-  if (limitAt(productKey, lever, capOverride).limit >= target) return lever.income;
-  if (limitAt(productKey, { ...lever, income: lever.incomeMax }, capOverride).limit < target) return null;
-  let lo = lever.income, hi = lever.incomeMax;   // lo = 못 닿는 쪽, hi = 닿는 쪽
-  for (let i = 0; i < 40 && hi - lo > 10; i++) {
-    const mid = (lo + hi) / 2;
-    if (limitAt(productKey, { ...lever, income: mid }, capOverride).limit >= target) hi = mid; else lo = mid;
-  }
-  return hi;
 }

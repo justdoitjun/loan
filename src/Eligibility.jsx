@@ -20,33 +20,9 @@
    상품 목록이 그 자리를 차지한다 — 다 채운 입력폼이 결과를 밀어내지 않게. */
 import { useRef, useState } from "react";
 import { SPOUSE_INCOME_BANDS, NO_HOME_EXCEPTION, TABS, C } from "./data.js";
-import { buildCtx, deriveFacts, judgeAll, nearIncomeCap, ageOf, won, eok } from "./engine.js";
+import { buildCtx, deriveFacts, judgeAll, nearIncomeCap, won, eok } from "./engine.js";
+import { bucketOf, filledAge, eligSteps } from "./person.js";
 import { BackButton, Section, ClosedCard, Placeholder, eyebrow, h1, card, fine, inputBox, pill } from "./ui.jsx";
-
-/* 자격 답변의 빈 상태. App이 최상위 state로 들고 있고 여기서만 채운다.
-   ⚠️ 필드 이름은 engine.deriveFacts가 읽는 이름이다. 바꾸려면 거기도 같이 본다. */
-export const EMPTY_ELIG = {
-  /* ── 1) 가족정보 카드 — 이 셋이 나이·배우자유무·자녀수·미성년·신생아를 전부 만든다 ── */
-  ownBirthday: "",        // 본인 생년월일 → 만나이(단독세대주 후보 / 만39세 이하 판정)
-  hasSpouse: null,        // true | false — "배우자 없음" 토글. ⚠️ false여도 결혼예정이면 예비배우자 소득은 묻는다
-  spouseBirthday: "",     // 배우자 생년월일. ⚠️ 지금 판정 규칙이 쓰는 값은 아니다(가구 확인용·향후 우대 대비)
-  birthdays: [],          // 자녀 생년월일 — 0명부터 동적 추가/삭제
-
-  /* ── 2~4) 단일 질문 ── */
-  homeCount: null,        // 0 = 무주택(진입 게이트). 화면은 네/아니오지만 엔진이 읽는 형식은 그대로 둔다
-  firstTime: null,        // 생애최초 — "한 번도 소유한 적 없다". 무주택("지금 없다")과 다른 개념
-  marital: null,          // "married" | "planned" | "single"  ← 4버킷이 이 둘로 매핑된다
-  marriedWithin7: null,   // marital="married"일 때만: 혼인신고 7년 이내면 true → 신혼가구
-  marriedDate: "",        // 이 화면에선 안 받는다(버킷으로 대체). 정밀 확인이 필요해지면 여기에 채운다
-  weddingDate: "",        // 결혼예정 3개월 이내 판정용 — 추후 세부 확인 단계에서 받는다
-
-  /* ── 5) 소득 ── */
-  spouseBand: null,       // SPOUSE_INCOME_BANDS의 key (배우자 있을 때만)
-  spouseIncomeRaw: "",    // 소득상한 경계일 때만 받는 정밀값(만원)
-
-  /* ── 6) 그 외 ── */
-  hasDreamAccount: null,  // 청년 주택드림 통장 (만39세 이하에게만 묻는다)
-};
 
 /* 결혼여부 4버킷 → 엔진이 읽는 (marital, marriedWithin7) 조합.
    ⚠️ "신혼(7년 이내)" 버킷이 빠지면 실제 신혼부부를 못 잡아 소득상한·한도가 낮게 오판정된다. */
@@ -58,16 +34,6 @@ const MARITAL_BUCKETS = [
   { key: "over7",   label: "혼인신고한 지 7년 넘었어요", desc: "결혼했지만 신혼 기준에선 벗어나요",                 marital: "married", within7: false, needsSpouse: true },
   { key: "none",    label: "배우자가 없어요",           desc: "미혼·이혼·사별 모두 포함해요",                     marital: "single",  within7: null,  needsSpouse: false },
 ];
-
-const bucketOf = (elig) => {
-  if (elig.marital === "single") return "none";
-  if (elig.marital === "planned") return "planned";
-  if (elig.marital === "married") return elig.marriedWithin7 === true ? "new7" : elig.marriedWithin7 === false ? "over7" : null;
-  return null;
-};
-
-/* 미래 날짜·빈칸을 걸러낸다. 아이 생년월일이 내일이면 나이가 음수가 되는데, 그걸 '입력 완료'로 보면 안 된다. */
-const filledAge = (d) => { const a = ageOf(d); return a !== null && a >= 0 ? a : null; };
 
 /* 접힌 드랍다운이 보여줄 요약. 접어도 '무엇으로 판정했는지'는 숨기지 않는다 —
    근거가 사라지고 결과 숫자만 남으면, 사용자는 자기가 뭘 답했는지부터 의심하게 된다. */
@@ -95,16 +61,11 @@ export default function Eligibility({ unit, cash, ownIncome, kind, setKind, elig
   const ctx = buildCtx({ unit, cash, ownIncome, elig });
   const facts = deriveFacts(ctx);
 
-  const gateOpen = elig.homeCount === 0;
-
-  /* 배우자는 두 갈래로 본다. 하나로 합치면 결혼예정자의 소득이 통째로 0이 된다.
-       spouseDeclared = 가족정보 카드에서 직접 "있다"고 답한 것 → 버킷 모순 차단에만 쓴다.
-       spouseCounted  = 소득을 합산할 상대가 있는가 → 결혼예정이면 예비배우자가 있다고 간주한다.
-     engine.spouseIncomeOf는 marital !== "single"이면 배우자 소득을 합산한다(결혼예정 포함).
-     그런데 화면이 "배우자 없음"만 보고 소득 질문을 건너뛰면 그 합산분이 0으로 들어가서,
-     부부합산소득이 실제보다 낮게 잡히고 소득상한을 잘못 통과한다 — 없는 초록을 만든다. */
-  const spouseDeclared = elig.hasSpouse === true;
-  const spouseCounted = spouseDeclared || elig.marital === "planned";
+  /* 질문 진행 상태는 전부 eligSteps 한 곳에서 온다 — App/지도가 쓰는 것과 같은 판단이다. */
+  const {
+    gateOpen, spouseDeclared, spouseCounted, familyReady, askFirstTime,
+    askMarital, askIncome, incomeReady, needsDream, ready,
+  } = eligSteps(elig);
 
   /* 배우자 토글은 뒤 질문들과 모순을 만들 수 있다 → 바뀌는 순간 어긋난 답만 조용히 비운다.
      (경고를 띄우고 사용자에게 치우게 하는 것보다, 애초에 모순이 못 남게 하는 쪽) */
@@ -121,23 +82,6 @@ export default function Eligibility({ unit, cash, ownIncome, kind, setKind, elig
 
   const pickBucket = (b) => setElig((s) => ({ ...s, marital: b.marital, marriedWithin7: b.within7 }));
   const pickBand = (k) => setElig((s) => ({ ...s, spouseBand: k, spouseIncomeRaw: "" })); // 밴드 바뀌면 정밀값 무효
-
-  /* ── 단계 (답에 따라 불필요한 질문은 건너뛴다) ── */
-  // 1) 가족정보: 배우자 생년월일은 판정에 안 쓰므로 진행을 막지 않는다 — 비워도 다음으로 간다.
-  const childrenFilled = elig.birthdays.every((d) => filledAge(d) !== null);
-  const familyReady = filledAge(elig.ownBirthday) !== null && elig.hasSpouse !== null && childrenFilled;
-  // 2) 무주택 게이트 → 3) 생애최초 → 4) 결혼여부
-  const askFirstTime = familyReady && gateOpen;
-  const askMarital = askFirstTime && elig.firstTime !== null;
-  const maritalReady = bucketOf(elig) !== null;
-  // 5) 소득 — 배우자 없으면 항목 자체를 숨긴다
-  const askIncome = askMarital && maritalReady;
-  const incomeReady = !spouseCounted || elig.spouseBand !== null;
-  // 6) 청년 주택드림 — 만39세 이하에게만 묻는다(40대에겐 어차피 안 열리는 경로)
-  const needsDream = facts.under39;
-  const dreamReady = !needsDream || elig.hasDreamAccount !== null;
-
-  const ready = askIncome && incomeReady && dreamReady;
 
   /* 다 채우면 질문 더미를 접는다. editing은 "다시 펼쳐서 고치는 중"이라는 일시 상태라
      여기 로컬에 둔다 — 답 자체가 아니니 EMPTY_ELIG(상위 state)에 올리지 않는다.
@@ -208,7 +152,6 @@ export default function Eligibility({ unit, cash, ownIncome, kind, setKind, elig
               {askFirstTime && (
                 <div className="slideup">
                   <YesNo label="생애 처음으로 집을 사시는 건가요?"
-                    // desc="무주택은 '지금 집이 없다', 생애최초는 '한 번도 집을 가져본 적 없다'는 뜻이에요. 부부라면 두 분 모두요."
                     value={elig.firstTime} onPick={(v) => set("firstTime", v)} />
                 </div>
               )}
@@ -246,7 +189,6 @@ export default function Eligibility({ unit, cash, ownIncome, kind, setKind, elig
               {askIncome && incomeReady && needsDream && (
                 <div className="slideup" style={{ paddingTop: 10, borderTop: `1px solid ${C.line}` }}>
                   <YesNo label="혹시, 청년 주택드림 청약통장으로 당첨된 건인가요?"
-                    // desc="해당자만요. 통장 연계가 전제라 없으면 이 대출은 안 열려요."
                     value={elig.hasDreamAccount} onPick={(v) => set("hasDreamAccount", v)} yes="예" no="아니오·해당없음" />
                 </div>
               )}
@@ -399,8 +341,7 @@ function FieldRow({ label, hint, children }) {
 const Divider = () => <div style={{ borderTop: `1px solid ${C.line}`, margin: "14px 0" }} />;
 
 /* ── 다 채운 질문 더미를 접는 드랍다운 ──
-   ContextSummary(앞 화면에서 받은 값)와 같은 줄 모양을 쓴다 — 사용자에겐 둘 다
-   "이미 답한 것"이라 다르게 생길 이유가 없다. 차이는 이건 펼쳐서 고칠 수 있다는 것뿐. */
+   접어도 무엇으로 판정했는지는 남긴다. 펼치면 답을 고칠 수 있다. */
 function AnswersDropdown({ open, onToggle, rows }) {
   return (
     <div style={{ ...card, padding: "12px 16px", marginBottom: 16 }}>

@@ -3,7 +3,6 @@
    상품 차이는 src/products/* 와 data.js에만 둔다. */
 import { useEffect, useRef, useState } from "react";
 import { C } from "./data.js";
-import { won } from "./engine.js";
 
 /* ── 스타일 토큰 ── */
 export const eyebrow = { fontSize: 12, letterSpacing: 2, color: C.greenDeep, fontWeight: 700 };
@@ -29,7 +28,16 @@ export const css = `
   @keyframes slideup{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
   .modal{animation:popin .22s ease;}
   @keyframes popin{from{opacity:0;transform:scale(.94);}to{opacity:1;transform:scale(1);}}
-  @media (prefers-reduced-motion: reduce){.dot,.slideup,.modal{animation:none;transition:none;}}
+
+  /* 아코디언 — 높이를 JS로 재지 않고 grid 1fr↔0fr로 접는다(내용이 바뀌어도 안 깨진다) */
+  .acc{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s ease;}
+  .acc[data-open="true"]{grid-template-rows:1fr;}
+  .acc>.acc-inner{overflow:hidden;}
+
+  @media (prefers-reduced-motion: reduce){
+    .dot,.slideup,.modal{animation:none;}
+    .dot,.acc{transition:none;}
+  }
 `;
 
 /* ── 레이아웃 ── */
@@ -51,33 +59,6 @@ export function Stat({ label, value, warn }) {
   return <div><div style={{ fontSize: 11, color: C.inkSoft }}>{label}</div><div style={{ fontSize: 15, fontWeight: 800, color: warn ? C.amber : C.ink }}>{value}</div></div>;
 }
 
-export function Block({ title, items }) {
-  return <div style={{ ...card, marginTop: 12 }}>
-    <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>{title}</div>
-    {items.map((t, i) => <div key={i} style={{ display: "flex", gap: 8, fontSize: 14, lineHeight: 1.55, marginBottom: 6 }}><span style={{ color: C.greenDeep, fontWeight: 800 }}>·</span><span>{t}</span></div>)}
-  </div>;
-}
-
-export function Choice({ label, options, value, onPick }) {
-  return <div style={{ marginBottom: 14 }}>
-    <div style={{ fontSize: 13, color: C.inkSoft, fontWeight: 600, marginBottom: 7 }}>{label}</div>
-    <div style={{ display: "flex", gap: 8 }}>
-      {options.map(([t, v]) => <button key={t} onClick={() => onPick(v)} style={pill(value === v)}>{t}</button>)}
-    </div>
-  </div>;
-}
-
-/* Choice와 같은 리듬이되 선택지가 많아 줄바꿈되는 경우(신용대출 잔액 등). hint로 '대충 골라도 된다'를 말한다. */
-export function Pills({ label, hint, options, value, onPick }) {
-  return <div style={{ marginBottom: 14 }}>
-    <div style={{ fontSize: 13, color: C.inkSoft, fontWeight: 600, marginBottom: hint ? 3 : 7 }}>{label}</div>
-    {hint && <div style={{ fontSize: 12, color: "#9AA3A0", marginBottom: 7, lineHeight: 1.55 }}>{hint}</div>}
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-      {options.map(([t, v]) => <button key={t} onClick={() => onPick(v)} style={{ ...pill(value === v), flex: "1 1 28%", whiteSpace: "nowrap" }}>{t}</button>)}
-    </div>
-  </div>;
-}
-
 export function Slider({ label, value, min, max, step, onChange, display }) {
   return <div style={{ marginBottom: 12 }}>
     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
@@ -94,28 +75,6 @@ export function ClosedCard({ exception }) {
     <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6, color: C.inkSoft }}>지금은 닫혀 있어요</div>
     <div style={{ fontSize: 14, color: C.inkSoft, lineHeight: 1.6 }}>{exception}</div>
   </div>;
-}
-
-/* 앞에서 받은 걸 다시 묻지 않는다는 증거. DetailInfo·Strategy 상단에 고정으로 붙인다. */
-export function ContextSummary({ ctx }) {
-  const rows = [
-    ["매물", `${ctx.unit.name} · ${won(ctx.unit.price)}원`],
-    ["소득", `본인 ${won(ctx.ownIncome)} + 배우자 ${won(ctx.spouseIncome)} = 부부합산 약 ${won(ctx.totalIncome)}원`],
-    ["가구", `${ctx.noHome ? "무주택" : "유주택"} · ${ctx.newlywed ? "신혼" : "신혼 아님"} · 미성년 ${ctx.minors}명`],
-    ["필요 대출", `약 ${won(ctx.needed)}원 (보유 현금 ${won(ctx.cash)}원 제외)`],
-    ["추천 대출", ctx.recommended.name],
-  ];
-  return (
-    <div style={{ ...card, padding: "12px 16px", marginBottom: 16 }}>
-      <div style={{ fontSize: 12, fontWeight: 800, color: C.greenDeep, marginBottom: 8 }}>앞에서 받은 정보 — 다시 묻지 않아요</div>
-      {rows.map(([k, v]) => (
-        <div key={k} style={{ display: "flex", gap: 10, fontSize: 12, lineHeight: 1.6, marginBottom: 3 }}>
-          <span style={{ color: C.inkSoft, flex: "0 0 62px" }}>{k}</span>
-          <span style={{ flex: 1 }}>{v}</span>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 /* ── 상품 컴포넌트가 공유하는 섹션 껍데기 ──

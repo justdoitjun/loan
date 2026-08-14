@@ -1,5 +1,5 @@
-/* 디딤돌 5종 규칙 데이터 (2026.05.26 기준) — ✏️ 전부 가상 숫자! 현직 지식으로 교체할 것.
-   규제가 바뀌면 이 배열만 고친다. 판정 함수(engine.judgeRule)는 손대지 않는다.
+/* 디딤돌 5종 규칙 데이터 — 숫자의 출처는 `.claude/rules/products/didimdol.md` (2026.05.26 원문).
+   규제가 바뀌면 그 문서를 먼저 고치고 이 배열을 맞춘다. 판정 함수(engine.judgeRule)는 손대지 않는다.
    금액 단위: 만원. 면적: ㎡.
 
    조건 표기 DSL (함수가 아니라 '플래그 이름'으로 쓴다 — 데이터 파일에 로직을 두지 않기 위해):
@@ -22,6 +22,7 @@ export const DIDIMDOL_RULES = [
     ],
     incomeCap: [
       { when: ["newlywed"], value: 8500, label: "신혼" },
+      { when: ["adult30SoleSingle"], value: 6000, label: "만30세 이상 단독세대주(미혼)" },
       { when: [["firstTime", "twoPlusMinors"]], value: 7000, label: "생애최초 또는 미성년 2자녀 이상" },
       { when: [], value: 6000, label: "기본" },
     ],
@@ -40,8 +41,8 @@ export const DIDIMDOL_RULES = [
       { when: [["newlywed", "twoPlusMinors"]], value: 32000, label: "신혼 또는 미성년 2자녀 이상" },
       { when: ["adult30SoleSingle", "firstTime"], value: 20000, label: "만30세 이상 단독세대주 + 생애최초" },
       { when: ["adult30SoleSingle"], value: 15000, label: "만30세 이상 단독세대주(미혼)" },
-      { when: ["firstTime"], value: 30000, label: "생애최초" },
-      { when: [], value: 25000, label: "기본" },
+      { when: ["firstTime"], value: 24000, label: "생애최초" },
+      { when: [], value: 20000, label: "기본" },
     ],
     note: "가장 기본 대출이에요. 우대 조건이 붙을수록 상한과 한도가 같이 올라가요.",
   },
@@ -70,7 +71,7 @@ export const DIDIMDOL_RULES = [
       { when: [], value: 13000, label: "외벌이" },
     ],
     priceCap: [{ when: [], value: 90000, label: "신생아 특례" }],
-    areaCap: null, // 면적 요건은 이번 데이터에 없음 → 검사하지 않는다
+    areaCap: 85,
     loanCap: [{ when: [], value: 40000, label: "신생아 특례" }],
     note: "소득 문턱이 가장 높은 대출이에요. 아이 출생일이 기준이라 시점을 꼭 확인하세요.",
   },
@@ -87,7 +88,7 @@ export const DIDIMDOL_RULES = [
       { when: [], value: 7000, label: "미혼" },
     ],
     priceCap: [{ when: [], value: 60000, label: "청년 주택드림" }],
-    areaCap: null,
+    areaCap: 85,
     loanCap: [
       { when: ["newlywed"], value: 40000, label: "신혼" },
       { when: [], value: 30000, label: "미혼" },
@@ -102,7 +103,7 @@ export const DIDIMDOL_RULES = [
     ],
     incomeCap: [{ when: [], value: 7000, label: "전세사기피해자" }],
     priceCap: [{ when: [], value: 50000, label: "전세사기피해자(주거용 오피스텔 포함)" }],
-    areaCap: null,
+    areaCap: 85,
     loanCap: [{ when: [], value: 40000, label: "전세사기피해자" }],
     note: "피해자 결정문 등 별도 확인이 필요해요. 지금은 판정에서 꺼둔 상태예요.",
   },

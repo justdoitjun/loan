@@ -45,14 +45,6 @@ export function annualDebtService(debtBalance, view = "principalAndInterest") {
   return view === "interestOnly" ? d * RULE.creditRate : d / RULE.creditYears + d * RULE.creditRate;
 }
 
-/* 소득의 질 → 신뢰도. 금액만큼 중요한 게 "지금도 인정되는 소득인가"다.
-   근로 + 재직 2개월 이상이면 초록. 그 외는 노랑 — 문을 닫는 게 아니라
-   "입력대로 다 인정 안 될 수 있어요 → 상담역 확인"이라는 뜻이다(가드레일 3·4). */
-export function incomeTrust(q) {
-  if (!q || !q.type || q.stable == null) return null;
-  return q.type === "work" && q.stable === true ? "ok" : "warn";
-}
-
 /* ── 한도 ── */
 /* 순수 계산: 월상환액 1을 감당할 수 있을 때의 원금(= 연금현가계수). PMT 역산의 공통 산수다.
    '정책'이 아니라 '산수'라서 DSR·DTI 두 잣대가 같이 쓴다 — 잣대의 차이는 무엇을 빼는지에 있다. */
@@ -159,10 +151,7 @@ export function evaluate(unit, dsrCap, cash) {
    debt = 레버에서 온 raw 부채 { balance, view } (만원). null이면 무부채(천장 잣대).
    받는 건 잔액 하나뿐이고, 그걸 이자로 볼지 원리금으로 볼지는 잣대가 정한다.
    상환능력을 어떤 식으로 볼지는 상품 데이터(PRODUCTS[key].capacityModel)가 정한다 —
-   여기서 productKey로 분기하지 말 것. fundDTI = 디딤돌 DTI식 / 그 외 = 은행 DSR식(보수적 기본값).
-
-   돌려주는 dti = 디딤돌 계열일 때만 채워지는 '확정 대출액 기준 DTI 정산'(그 외 null).
-   한도(Min)를 먼저 정한 다음 그 금액으로 다시 계산한다 — 순서가 뒤집히면 순환이 된다. */
+   여기서 productKey로 분기하지 말 것. fundDTI = 디딤돌 DTI식 / 그 외 = 은행 DSR식(보수적 기본값). */
 export function limitParts(p, price, income, debt = null, capOverride = null) {
   const ltv = Math.max(price * p.LTV - (p.offsetsRoomDeduction ? 0 : RULE.roomDeduction), 0);
   const balance = debt?.balance ?? 0;
@@ -182,9 +171,7 @@ export function limitParts(p, price, income, debt = null, capOverride = null) {
   const binding = parts.reduce((a, b) => (b.value < a.value ? b : a));
   const limit = Math.max(binding.value, 0);
 
-  /* 여기서 비로소 본건 원리금이 '숫자'가 된다 — 한도를 만든 뒤 그 한도로 되짚는 방향.
-     레버가 한도를 못 움직이는 구간(cap·LTV가 벽)에서도 이 값은 살아 움직인다. */
-  return { limit, parts, binding, existingAnnual, dti: fund ? didimdolDtiAt(limit, income, balance) : null };
+  return { limit, parts, binding };
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

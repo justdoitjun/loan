@@ -25,7 +25,6 @@ export const AMBER_BAND = 0.10;
 export const LEVER = {
   /* 부채는 '잔액' 하나만 받는다. 두 잣대 모두 잔액에서 출발하기 때문 —
      디딤돌 DTI는 잔액 × 추정금리(이자만), 은행 DSR은 잔액을 원리금으로 환산. 월상환액은 안 묻는다. */
-  debtPills: [0, 1000, 3000, 5000, 10000, 20000],     // 대출 잔액 합계 '대충' 선택지(만원). 마지막 칸은 '이상'
   incomeHeadroom: 4000,                               // 소득 레버가 위로 열리는 폭(만원). 상품 소득상한에서 잘린다
   incomeStep: 100,
 };
@@ -40,21 +39,11 @@ export const PRODUCTS = {
        ⚠️ calcRate도 없다. 디딤돌 원리금 계산 금리는 아래 DIDIMDOL_LOAN_RATE 한 곳에만 둔다
           (기타부채 추정금리 ESTIMATED_DEBT_RATE와 구분하기 위해서다). 여기 되살리지 말 것. */
     key: "didimdol", name: "디딤돌대출", rateLabel: "연 2~3%대", capacityModel: "fundDTI",
-    LTV: 0.70, offsetsRoomDeduction: false, cap: 25000, leadTime: "약 2개월",
-    guide: {
-      prepare: ["소득 증빙(원천징수/소득금액증명)", "무주택 확인(세대 전원 등본·전입세대열람)", "혼인·가족관계증명(해당 시)"],
-      ask: ["제 소득으로 디딤돌 대상이 되나요?", "이 단지 전용면적·매매가가 요건 안에 드나요?"],
-      fallback: ["가격·면적·소득 상한 중 하나라도 넘으면 보금자리론 가능 여부를 이어서 물어보세요."],
-    },
+    LTV: 0.70, offsetsRoomDeduction: false, cap: 20000, leadTime: "약 2개월",
   },
   bogeumjari: {
     key: "bogeumjari", name: "보금자리론", rateLabel: "연 3~4%대",
     calcRate: 0.038, ratio: 0.60, LTV: 0.70, offsetsRoomDeduction: true, cap: 36000, leadTime: "약 1.5~2개월",
-    guide: {
-      prepare: ["소득 증빙", "무주택/1주택 확인 서류", "매매계약서"],
-      ask: ["제 조건에서 보금자리론 한도는 얼마까지 나오나요?", "MCG로 방공제 상쇄하면 한도가 얼마나 늘어나나요?"],
-      fallback: ["가격 상한을 살짝 넘으면 일반 은행 주담대와 한도를 비교해달라고 하세요."],
-    },
   },
 };
 

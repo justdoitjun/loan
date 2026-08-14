@@ -1,7 +1,7 @@
 /* "내 소득, 그대로 인정될까?" — 소득의 신뢰도를 스스로 가늠해보는 화면.
    목적은 "소득이 얼마인지"가 아니라 "입력한 소득을 얼마나 믿을 수 있는지"를 보는 것
-   — DetailInfo.jsx의 소득의 질 뱃지(초록/노랑)와 같은 개념을, 디딤돌 실제 규정
-   (src/data/incomeRules.js)에 맞춰 훨씬 자세히 물어보는 버전이다.
+   — 디딤돌 실제 규정(src/data/incomeRules.js)의 체크리스트로
+   초록/노랑 논조만 만든다. 한도 숫자는 깎지 않는다(didimdol.md 5절).
 
    흐름: 그룹 선택 → (그룹 안에 유형이 여럿이면) 세부 유형 선택 → 유형별 체크리스트
    질문 → 결과. 질문 목록·선택지·메모는 전부 incomeRules.js의 데이터에서 읽는다
@@ -17,12 +17,9 @@
    계산 함수를 engine.js가 아니라 여기 둔 이유: 지금은 이 화면 하나만 쓰는 계산이라서.
    자격 판정(Eligibility)이나 전략(Strategy)이 이 결과를 갖다 쓰게 되면 그때 옮긴다. */
 import { useState } from "react";
-import { INCOME_TYPES } from "./data/incomeRules.js";
+import { ACTIVE_INCOME_TYPES } from "./data/incomeRules.js";
 import { C } from "./data.js";
 import { BackButton, Section, eyebrow, h1, fine, pill, ghostBtn } from "./ui.jsx";
-
-/* 아직 아무것도 안 고른 상태. App이 최상위 state로 들고 있고 여기서만 채운다. */
-export const EMPTY_INCOME_CHECK = { groupKey: null, typeKey: null, answers: {} };
 
 /* 그룹은 규정을 그대로 노출하지 않고 "당신은 어느 쪽인가요"로 물을 수 있게
    묶은 단위다(incomeRules.js의 그룹 필드). 라벨·설명은 사용자 카피라 데이터 파일이
@@ -37,10 +34,11 @@ const GROUP_META = {
   "소득추정": { label: "소득 증빙이 어려워요", desc: "서류로 증명하기 힘들면 건강보험료·국민연금 납부액으로도 볼 수 있어요" },
   "무소득": { label: "지금은 소득이 없어요", desc: "" },
 };
-const GROUP_ORDER = ["근로-재직", "근로-휴직복직", "근로-일용", "사업", "연금", "기타", "소득추정", "무소득"];
+const GROUP_ORDER = ["근로-재직", "근로-휴직복직", "근로-일용", "사업", "연금", "기타", "소득추정", "무소득"]
+  .filter((g) => ACTIVE_INCOME_TYPES.some((t) => t.그룹 === g));
 
-const typesInGroup = (groupKey) => INCOME_TYPES.filter((t) => t.그룹 === groupKey);
-const typeOf = (typeKey) => INCOME_TYPES.find((t) => t.소득유형 === typeKey) ?? null;
+const typesInGroup = (groupKey) => ACTIVE_INCOME_TYPES.filter((t) => t.그룹 === groupKey);
+const typeOf = (typeKey) => ACTIVE_INCOME_TYPES.find((t) => t.소득유형 === typeKey) ?? null;
 
 /* 조건부 질문(예: "20% 넘게 차이나요?"에 '네'라고 답했을 때만 다음 질문)을 걸러낸다.
    조건이 가리키는 이전 질문이 아직 안 채워졌으면 이 질문도 아직 안 보인다. */
