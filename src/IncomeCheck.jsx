@@ -7,7 +7,7 @@
    질문 → 결과. 질문 목록·선택지·메모는 전부 incomeRules.js의 데이터에서 읽는다
    — 화면에 "근로소득이면 이 질문, 사업소득이면 저 질문" 식 하드코딩을 하지 않는다.
 
-   ⚠️ incomeRules.js의 인정소득_산정방법/예외_비고는 은행 실무자용 원문 인용이라
+   ⚠️ incomeRules.js의 incomeCalcMethod/exceptionsNotes는 은행 실무자용 원문 인용이라
    그대로 사용자에게 보여주지 않는다(Step①②③, 방법①② 같은 표기가 낯설다).
    화면에 보이는 질문·메모 문구는 그 원문을 사용자 언어로 옮긴 별도 카피다.
 
@@ -25,30 +25,30 @@ import { BackButton, Section, eyebrow, h1, fine, pill, ghostBtn } from "./ui.jsx
    묶은 단위다(incomeRules.js의 그룹 필드). 라벨·설명은 사용자 카피라 데이터 파일이
    아니라 여기 둔다 — incomeRules.js는 규정 원문, 이건 화면 문구라서 성격이 다르다. */
 const GROUP_META = {
-  "근로-재직": { label: "회사에 다니고 있어요", desc: "정규직·계약직 등, 지금 재직 중" },
-  "근로-휴직복직": { label: "휴직 중이거나 최근 복직했어요", desc: "육아휴직·병가 등" },
-  "근로-일용": { label: "일용직이에요", desc: "그때그때 또는 매일 급여를 받아요" },
-  "사업": { label: "사업을 해요", desc: "개인사업자, 프리랜서·보험설계사·학원강사 등 포함" },
-  "연금": { label: "연금을 받아요", desc: "국민연금·공무원연금·군인연금 등" },
-  "기타": { label: "그 외 소득이에요", desc: "종교인 소득 등" },
-  "소득추정": { label: "소득 증빙이 어려워요", desc: "서류로 증명하기 힘들면 건강보험료·국민연금 납부액으로도 볼 수 있어요" },
-  "무소득": { label: "지금은 소득이 없어요", desc: "" },
+  "employed": { label: "회사에 다니고 있어요", desc: "정규직·계약직 등, 지금 재직 중" },
+  "leave-return": { label: "휴직 중이거나 최근 복직했어요", desc: "육아휴직·병가 등" },
+  "daily": { label: "일용직이에요", desc: "그때그때 또는 매일 급여를 받아요" },
+  "business": { label: "사업을 해요", desc: "개인사업자, 프리랜서·보험설계사·학원강사 등 포함" },
+  "pension": { label: "연금을 받아요", desc: "국민연금·공무원연금·군인연금 등" },
+  "other": { label: "그 외 소득이에요", desc: "종교인 소득 등" },
+  "estimated": { label: "소득 증빙이 어려워요", desc: "서류로 증명하기 힘들면 건강보험료·국민연금 납부액으로도 볼 수 있어요" },
+  "no-income": { label: "지금은 소득이 없어요", desc: "" },
 };
-const GROUP_ORDER = ["근로-재직", "근로-휴직복직", "근로-일용", "사업", "연금", "기타", "소득추정", "무소득"]
-  .filter((g) => ACTIVE_INCOME_TYPES.some((t) => t.그룹 === g));
+const GROUP_ORDER = ["employed", "leave-return", "daily", "business", "pension", "other", "estimated", "no-income"]
+  .filter((g) => ACTIVE_INCOME_TYPES.some((t) => t.group === g));
 
-const typesInGroup = (groupKey) => ACTIVE_INCOME_TYPES.filter((t) => t.그룹 === groupKey);
-const typeOf = (typeKey) => ACTIVE_INCOME_TYPES.find((t) => t.소득유형 === typeKey) ?? null;
+const typesInGroup = (groupKey) => ACTIVE_INCOME_TYPES.filter((t) => t.group === groupKey);
+const typeOf = (typeKey) => ACTIVE_INCOME_TYPES.find((t) => t.incomeType === typeKey) ?? null;
 
 /* 조건부 질문(예: "20% 넘게 차이나요?"에 '네'라고 답했을 때만 다음 질문)을 걸러낸다.
    조건이 가리키는 이전 질문이 아직 안 채워졌으면 이 질문도 아직 안 보인다. */
 function visibleChecklist(type, answers) {
-  return type.체크리스트.filter((q) => {
-    if (!q.조건) return true;
-    const depIdx = answers[q.조건.dependsOn];
+  return type.checklist.filter((q) => {
+    if (!q.condition) return true;
+    const depIdx = answers[q.condition.dependsOn];
     if (depIdx == null) return false;
-    const depQ = type.체크리스트.find((x) => x.id === q.조건.dependsOn);
-    return depQ.선택지[depIdx].통과 === q.조건.답;
+    const depQ = type.checklist.find((x) => x.id === q.condition.dependsOn);
+    return depQ.choices[depIdx].pass === q.condition.답;
   });
 }
 
@@ -61,20 +61,20 @@ export function incomeCheckReady(value) {
 
 /* 답변 → 결과. 기본논조가 amber인 유형(일환산·휴직·소득추정 등, 애초에 액면가와
    산정법이 다른 경우)은 체크리스트 답과 무관하게 항상 노랑이다 — 체크리스트는 그때
-   어떤 메모를 보여줄지만 정한다. 기본논조가 green인 유형은 질문 하나라도 "통과:false"로
+   어떤 메모를 보여줄지만 정한다. 기본논조가 green인 유형은 질문 하나라도 "pass:false"로
    답해지면 노랑으로 떨어진다. 준비가 안 됐으면 null(화면이 결과 대신 다음 질문을 그린다). */
 export function incomeCheckResult(value) {
   const type = typeOf(value.typeKey);
   if (!type || !incomeCheckReady(value)) return null;
   const visible = visibleChecklist(type, value.answers);
-  const picked = visible.map((q) => ({ q, choice: q.선택지[value.answers[q.id]] }));
+  const picked = visible.map((q) => ({ q, choice: q.choices[value.answers[q.id]] }));
   /* "20% 넘게 차이나요?"처럼 위험 답변이 후속 질문(조건부)을 여는 경우, 그 후속 질문의
-     답이 최종 결론이다 — 앞 질문 자체의 통과:false는 "final" 판정에서 빼야 한다.
+     답이 최종 결론이다 — 앞 질문 자체의 pass:false는 "final" 판정에서 빼야 한다.
      안 그러면 후속 질문에서 "상시소득이라 괜찮다"고 답해도 계속 노랑에 갇힌다. */
-  const hasVisibleFollowUp = (qid) => visible.some((v) => v.조건?.dependsOn === qid);
-  const failed = picked.some((p) => p.choice.통과 === false && !hasVisibleFollowUp(p.q.id));
-  const tone = type.기본논조 === "amber" || failed ? "amber" : "green";
-  const notes = picked.filter((p) => p.choice.메모).map((p) => p.choice.메모);
+  const hasVisibleFollowUp = (qid) => visible.some((v) => v.condition?.dependsOn === qid);
+  const failed = picked.some((p) => p.choice.pass === false && !hasVisibleFollowUp(p.q.id));
+  const tone = type.baseTone === "amber" || failed ? "amber" : "green";
+  const notes = picked.filter((p) => p.choice.note).map((p) => p.choice.note);
   return { tone, type, notes };
 }
 
@@ -87,7 +87,7 @@ export default function IncomeCheck({ value, onChange, onBack }) {
 
   const pickGroup = (g) => {
     const only = typesInGroup(g);
-    onChange({ groupKey: g, typeKey: only.length === 1 ? only[0].소득유형 : null, answers: {} });
+    onChange({ groupKey: g, typeKey: only.length === 1 ? only[0].incomeType : null, answers: {} });
   };
   const pickType = (typeKey) => onChange({ ...value, typeKey, answers: {} });
   const answer = (qid, idx) => onChange({ ...value, answers: { ...value.answers, [qid]: idx } });
@@ -128,8 +128,8 @@ export default function IncomeCheck({ value, onChange, onBack }) {
           <Section title="② 좀 더 정확히는요?">
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {candidates.map((t) => (
-                <button key={t.소득유형} onClick={() => pickType(t.소득유형)} style={{ ...pill(value.typeKey === t.소득유형), flex: "1 1 auto" }}>
-                  {t.표시명}
+                <button key={t.incomeType} onClick={() => pickType(t.incomeType)} style={{ ...pill(value.typeKey === t.incomeType), flex: "1 1 auto" }}>
+                  {t.displayName}
                 </button>
               ))}
             </div>
@@ -147,11 +147,11 @@ export default function IncomeCheck({ value, onChange, onBack }) {
               if (!answered && !isNext) return null; // 아직 그 앞 질문에 답 안 함 → 안 보여줌(순서대로)
               return (
                 <div key={q.id} className="slideup" style={{ marginBottom: i === visible.length - 1 ? 0 : 14 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>{q.질문}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>{q.question}</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {q.선택지.map((opt, idx) => (
-                      <button key={opt.라벨} onClick={() => answer(q.id, idx)} style={pill(value.answers[q.id] === idx)}>
-                        {opt.라벨}
+                    {q.choices.map((opt, idx) => (
+                      <button key={opt.label} onClick={() => answer(q.id, idx)} style={pill(value.answers[q.id] === idx)}>
+                        {opt.label}
                       </button>
                     ))}
                   </div>
@@ -193,10 +193,10 @@ function Result({ result, showDetail, setShowDetail }) {
         </div>
       )}
 
-      {type.필요서류?.length > 0 && (
+      {type.requiredDocuments?.length > 0 && (
         <div style={{ marginTop: ok ? 4 : 10, paddingTop: 10, borderTop: `1px solid ${C.line}` }}>
           <div style={{ fontSize: 12, fontWeight: 800, color: C.greenDeep, marginBottom: 5 }}>미리 준비하면 좋은 서류</div>
-          {type.필요서류.map((d) => <div key={d} style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.65 }}>· {d}</div>)}
+          {type.requiredDocuments.map((d) => <div key={d} style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.65 }}>· {d}</div>)}
         </div>
       )}
 
@@ -205,7 +205,7 @@ function Result({ result, showDetail, setShowDetail }) {
       </button>
       {showDetail && (
         <div className="slideup" style={{ marginTop: 10, padding: "12px 13px", borderRadius: 12, background: "#F7FAF7", border: `1px dashed ${C.line}`, fontSize: 12, color: C.inkSoft, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
-          {type.인정소득_산정방법}
+          {type.incomeCalcMethod}
         </div>
       )}
     </Section>

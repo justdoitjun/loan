@@ -23,6 +23,7 @@ export const DIDIMDOL_RULES = [
     incomeCap: [
       { when: ["newlywed"], value: 8500, label: "신혼" },
       { when: ["adult30SoleSingle"], value: 6000, label: "만30세 이상 단독세대주(미혼)" },
+      { when: [["firstTime"]], value: 7000, label: "생애최초 또는 미성년 2자녀 이상" },
       { when: [["firstTime", "twoPlusMinors"]], value: 7000, label: "생애최초 또는 미성년 2자녀 이상" },
       { when: [], value: 6000, label: "기본" },
     ],
