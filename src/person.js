@@ -50,7 +50,7 @@ export const EMPTY_ELIG = {
 /* 미래 날짜·빈칸을 걸러낸다. 아이 생년월일이 내일이면 나이가 음수가 되는데, 그걸 '입력 완료'로 보면 안 된다. */
 export const filledAge = (d) => { const a = ageOf(d); return a !== null && a >= 0 ? a : null; };
 
-/* 결혼여부 4버킷 중 지금 고른 것. 화면의 라벨·설명은 Eligibility.MARITAL_BUCKETS가 갖는다
+/* 결혼여부 4버킷 중 지금 고른 것. 화면의 라벨·설명은 eligibility/gov.jsx의 MARITAL_BUCKETS가 갖는다
    — 여기는 key만 안다(문구가 바뀌어도 판단이 안 흔들리게). */
 export const bucketOf = (elig) => {
   if (elig.marital === "single") return "none";

@@ -1,19 +1,3 @@
-/* 최상위 화면 전환 + 단계 오케스트레이션.
-   진짜 URL 라우팅은 나중. 지금은 step state 하나로 전환한다.
-
-   흐름:
-     budget      지도(예산 리빌)
-     list        가능한 매물 목록
-      └ 팝업     매물 선택 → 정부/은행
-     eligibility 자격 조건 입력 → 가능한 상품 목록   ← 자격은 여기서만 받는다
-     strategy    부채 입력 + 구체 한도 + 지렛대
-
-   상태 소유는 둘로 갈린다:
-     사람 상태(person)  — 매물과 무관한 것 전부. person.js의 한 객체에 모여 있고 화면을 오가도 유지된다.
-                          { ownIncome, cash, elig, detail, pull, incomeCheck }
-     화면 상태(여기 지역) — 지금 어느 매물을 보고 있나·어느 단계인가 같은 '탐색' 상태.
-                          { step, unit, kind, pickedKey, selectedId, modalUnit, budgetConfirmed }
-   이 경계가 핵심이다. 매물을 바꿔도 사람은 안 바뀌므로 자격·부채·레버를 다시 묻지 않는다. */
 import { useState, useMemo } from "react";
 import { DATA, RULE, C, COLOR_VALUE, COLOR_TEXT, DONG_LABELS } from "./data.js";
 import { evaluate, repaymentCapacity, buildCtx, won } from "./engine.js";
@@ -25,17 +9,12 @@ import Strategy from "./Strategy.jsx";
 import IncomeCheck, { incomeCheckResult } from "./IncomeCheck.jsx";
 
 export default function App() {
-  /* ── 사람 상태: 이 앱에서 "사람"에 관한 건 전부 이 한 객체다 ── */
   const [person, setPerson] = useState(EMPTY_PERSON);
-  /* 조각 하나만 갈아끼운다. 값도 updater 함수도 받는다 — 하위 화면이 쓰던
-     setElig((s) => ({...s, ...})) 관용구를 그대로 쓸 수 있게 하기 위해서다. */
   const patch = (key, v) => setPerson((p) => ({ ...p, [key]: typeof v === "function" ? v(p[key]) : v }));
   const setElig = (v) => patch("elig", v);
   const setDetail = (v) => patch("detail", v);
   const setPull = (v) => patch("pull", v);
   const { ownIncome: income, cash } = person;
-
-  /* ── 화면(탐색) 상태: 지금 어디를 보고 있나. 사람과 섞지 않는다 ── */
   const [step, setStep] = useState("budget");
   /* 소득·현금도 부채 슬라이더와 같은 원칙 — 0(맨 왼쪽)에서 시작하고, 아직 "확정"은 안 된 상태.
      budgetConfirmed가 켜지기 전엔 지도가 실제 색으로 안 물든다(아래 shellResults) —
@@ -142,7 +121,7 @@ export default function App() {
         <div className="slideup">
           <BackButton onClick={() => setStep("budget")}>지도로</BackButton>
           <div style={eyebrow}>가능한 매물</div>
-          <h1 style={h1}>지금 예산으로<br />닿는 집들이에요.</h1>
+          <h1 style={h1}>지금 예산으로<br />가능해요.</h1>
           <p style={{ fontSize: 13, color: C.inkSoft, margin: "0 0 14px" }}>하나를 고르면 어떤 대출로 갈지 함께 정해드려요.</p>
           {reachable.length === 0 && <div style={{ ...card, color: C.inkSoft, fontSize: 14 }}>지금은 닿는 매물이 없어요. 지도 화면에서 소득·현금을 조정해보세요.</div>}
           {reachable.map((r) => (
@@ -186,7 +165,6 @@ export default function App() {
   );
 }
 
-/* ── 예산 화면 조각들 ── */
 function ProductModal({ r, onPick, onClose }) {
   const toneColor = r.color === "green" ? C.greenDeep : r.color === "amber" ? "#9A6B12" : C.inkSoft;
   return (

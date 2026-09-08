@@ -10,7 +10,8 @@
 
    계산은 직접 하지 않는다. products/limit.js의 limitAt/ceilingAt에 레버 값을 넘기고 결과만 그린다
    — 그래서 이 파일은 어떤 상품인지 몰라도 된다(레버 → 모듈 → 결과 파이프).
-   ⚠️ 자격은 여기서 절대 다시 묻지 않는다. 자격은 Eligibility 한 곳에서만 받는다. */
+   ⚠️ 자격은 여기서 절대 다시 묻지 않는다. 자격은 Eligibility 화면에서만 받는다
+      (정부 → eligibility/gov.jsx, 은행 → eligibility/bank.jsx). */
 import { useMemo, useState } from "react";
 import { DATA, PRODUCTS, LEVER, C, COLOR_VALUE } from "./data.js";
 import { deriveFacts, judgeAll, withAssumedIncome, won, eok } from "./engine.js";
