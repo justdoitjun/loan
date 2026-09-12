@@ -1,7 +1,7 @@
 /* 계산 로직 한 곳. 화면(JSX)을 넣지 말 것.
    여러 페이지가 여기서만 import 한다 — 파일마다 다시 정의하면 규칙이 갈라진다.
    역할 분담: 상품 '규칙 데이터'는 src/products/*, 그 데이터를 읽는 '판정·계산'은 여기. */
-import { RULE, AMBER_BAND, PRODUCTS, SPOUSE_INCOME_BANDS, INCOME_EDGE_MARGIN, ESTIMATED_DEBT_RATE, DIDIMDOL_LOAN_RATE, DIDIMDOL_DTI } from "./data.js";
+import { RULE, REGION, REGION_CAP, PRODUCTS, SPOUSE_INCOME_BANDS, INCOME_EDGE_MARGIN, ESTIMATED_DEBT_RATE, DIDIMDOL_LOAN_RATE, DIDIMDOL_DTI } from "./data.js";
 import { PRODUCT_RULES, NEWBORN_RULE, NEWLYWED_YEARS, WEDDING_SOON_MONTHS } from "./products/index.js";
 
 /* ── 포맷 ── */
@@ -60,7 +60,7 @@ export const annualPayment = (principal, annualRate, years) =>
 
 /* 은행(DSR) 잣대 — 기존 부채를 '원리금 전체'로 보고 소득에서 뺀다.
    ⚠️ 디딤돌은 이 함수를 쓰지 않는다(디딤돌은 아래 didimdolDtiLimit). 두 식을 다시 합치지 말 것.
-   지금 쓰는 곳: 예산 화면의 천장(App.jsx), 그리고 capacityModel이 fundDTI가 아닌 상품. */
+   지금 쓰는 곳: 소득 화면의 천장(App.jsx), 그리고 capacityModel이 fundDTI가 아닌 상품. */
 export function repaymentCapacity(annualIncome, ratio, annualRate, years, existingAnnual) {
   const monthlyRoom = (annualIncome * ratio) / 12 - existingAnnual / 12;
   if (monthlyRoom <= 0) return 0;
@@ -133,20 +133,34 @@ export function didimdolDtiAt(didimdolAmount, annualIncome, otherDebtBalance, op
   };
 }
 
-/* 지도·목록의 초록/노랑/회색 판정. 부채 0을 가정한 '천장' 기준이다. */
-export function evaluate(unit, dsrCap, cash) {
+/* 지역별 주담대 한도(만원). 담보가격 구간 × 지역(REGION). null = 제한 없음.
+   표는 data.REGION_CAP 하나 — 여기서 숫자를 다시 적지 않는다. 은행 한도와 소득 화면 천장이 같이 읽는다. */
+export const regionCapOf = (price) => REGION_CAP.find((b) => price <= b.upTo)?.cap[REGION] ?? null;
+
+/* 필요 현금 = 시세에서 대출을 뺀 나머지. 대출이 시세를 넘으면 0 — 현금은 입력이 아니라 이 결과다. */
+export const cashNeededOf = (price, loan) => Math.max(num(price) - Math.max(num(loan), 0), 0);
+
+/* 소득 화면의 대략 한도. 부채 0을 가정한 '천장' 기준이다.
+   색을 돌리지 않는다 — 결과는 대출과 필요 현금 두 숫자. */
+export function evaluate(unit, dsrCap) {
   const ltv = unit.price * RULE.LTV - RULE.roomDeduction;
   let loanable = Math.min(dsrCap, ltv);
-  if (RULE.seoulCap) loanable = Math.min(loanable, RULE.seoulCap);
+  const region = regionCapOf(unit.price);
+  if (region != null) loanable = Math.min(loanable, region);
   loanable = Math.max(loanable, 0);
-  const budget = loanable + cash, slack = budget - unit.price, ratio = slack / unit.price;
-  const color = ratio > AMBER_BAND ? "green" : ratio < -AMBER_BAND ? "grey" : "amber";
-  return { ...unit, budget, slack, color, limitedBy: ltv <= dsrCap ? "ltv" : "dsr" };
+  return {
+    ...unit,
+    loan: loanable,
+    cashNeeded: cashNeededOf(unit.price, loanable),
+    limitedBy: ltv <= dsrCap ? "ltv" : "dsr",
+  };
 }
 
-/* 상품 한도 = Min(LTV기반, 상환능력, 이 경로의 한도).
+/* 상품 한도 = Min(LTV기반, 상환능력, 상품별 cap, 지역별 cap) — products/_common.md의 구조 그대로.
    한 함수가 '대략 한도'(부채 0)와 '구체 한도'(정밀 부채)를 둘 다 만든다 — 잣대를 갈라놓지 않기 위해.
    capOverride = 자격 판정에서 고른 티어의 loanCap(2억/3.2억/4억…). 없으면 상품 기본 cap.
+   cap이 null이면 '상품 자체 한도 없음'(은행) → 그 항은 Min에서 빠진다.
+   지역별 cap은 PRODUCTS[key].regionCapped인 상품에만 붙는다(정부상품은 제한 없음). 값은 regionCapOf.
 
    debt = 레버에서 온 raw 부채 { balance, view } (만원). null이면 무부채(천장 잣대).
    받는 건 잔액 하나뿐이고, 그걸 이자로 볼지 원리금으로 볼지는 잣대가 정한다.
@@ -159,15 +173,19 @@ export function limitParts(p, price, income, debt = null, capOverride = null) {
   /* 디딤돌: DTI(기존 부채는 이자만) / 그 외: DSR(기존 부채를 원리금으로) */
   const fund = p.capacityModel === "fundDTI";
   const existingAnnual = fund ? otherDebtInterest(balance) : annualDebtService(balance, debt?.view);
+  /* 은행 DSR: 본건 환산금리 = 가정금리 + 스트레스 가산(stressRate, 없으면 0). 산정만기는 상품 데이터(years), 없으면 30년. */
   const capacity = fund
     ? didimdolDtiLimit(income, balance)   // 금리·만기·DTI상한은 data.js의 디딤돌 파라미터가 정한다
-    : repaymentCapacity(income, p.ratio, p.calcRate, 30, existingAnnual);
+    : repaymentCapacity(income, p.ratio, p.calcRate + (p.stressRate ?? 0), p.years ?? 30, existingAnnual);
 
+  const cap = capOverride ?? p.cap;                              // null = 상품 자체 한도 없음
+  const region = p.regionCapped ? regionCapOf(price) : null;     // null = 지역 제한 없음
   const parts = [
     { key: "ltv", label: p.offsetsRoomDeduction ? "담보(LTV · 방공제 상쇄)" : "담보(LTV - 방공제)", value: ltv },
-    { key: "dti", label: fund ? "상환능력(DTI)" : "상환능력(DSR)", value: capacity },
-    { key: "cap", label: "정책상 최대한도", value: capOverride ?? p.cap },
-  ];
+    { key: "dti", label: fund ? "상환능력(DTI)" : `상환능력(DSR ${Math.round(p.ratio * 100)}%)`, value: capacity },
+    cap != null && { key: "cap", label: "정책상 최대한도", value: cap },
+    region != null && { key: "region", label: "지역별 주담대 한도", value: region },
+  ].filter(Boolean);
   const binding = parts.reduce((a, b) => (b.value < a.value ? b : a));
   const limit = Math.max(binding.value, 0);
 
@@ -187,13 +205,12 @@ export function spouseIncomeOf(elig) {
   return precise ?? band?.rep ?? 0;
 }
 
-export function buildCtx({ unit, cash, ownIncome, elig }) {
+export function buildCtx({ unit, ownIncome, elig }) {
   const spouseIncome = spouseIncomeOf(elig);
   return {
     ...elig,
-    unit, cash, ownIncome, spouseIncome,
+    unit, ownIncome, spouseIncome,
     totalIncome: ownIncome + spouseIncome,
-    needed: Math.max(unit.price - cash, 0),
   };
 }
 
@@ -268,6 +285,10 @@ export function deriveFacts(ctx) {
     maxPersonIncome: Math.max(ctx.ownIncome || 0, ctx.spouseIncome || 0),
     /* 플래그 */
     noHome: ctx.homeCount === 0,
+    /* 은행 LTV 표의 행(products/_common.md). 1주택은 '처분조건부'냐로 70%/0%가 갈린다 — disposeExisting은 은행탭만 묻는다. */
+    oneHome: ctx.homeCount === 1,
+    multiHome: ctx.homeCount >= 2,
+    disposing: ctx.homeCount === 1 && ctx.disposeExisting === true,
     firstTime: ctx.firstTime === true,
     single, married, planned,
     newlywed: withinNewlywed || weddingSoon,   // 혼인 7년 이내 또는 결혼예정 3개월 이내
@@ -306,10 +327,10 @@ export function judgeRule(rule, f) {
 
   const unmetRequires = rule.requires.filter((r) => !matchFlags(r.flags, f));
 
-  const checks = [
-    { key: "income", label: "소득", actual: f.income, cap: income.value, tier: income.label, over: f.income - income.value },
-    { key: "price", label: "가격", actual: f.price, cap: price.value, tier: price.label, over: f.price - price.value },
-  ];
+  /* 상한 값이 null이면 '상한 없음'(은행) — 검사 자체를 만들지 않는다(areaCap null과 같은 규칙). */
+  const checks = [];
+  if (income.value != null) checks.push({ key: "income", label: "소득", actual: f.income, cap: income.value, tier: income.label, over: f.income - income.value });
+  if (price.value != null) checks.push({ key: "price", label: "가격", actual: f.price, cap: price.value, tier: price.label, over: f.price - price.value });
   /* 맞벌이 티어처럼 '1인 상한'이 따로 붙는 경우 */
   if (income.perPersonCap != null) {
     checks.push({ key: "perPerson", label: "1인 소득", actual: f.maxPersonIncome, cap: income.perPersonCap, tier: income.label, over: f.maxPersonIncome - income.perPersonCap });
@@ -342,19 +363,22 @@ export function judgeRule(rule, f) {
   };
 }
 
-/* 대략 한도 = Min(경로 한도, LTV기반, 상환능력@부채0).
+/* 대략 한도 = Min(경로 한도, LTV기반, 상환능력@부채0, 지역별 cap).
    부채를 아직 안 받았으니 예산 화면과 같은 '천장' 잣대다. 상품을 고르면 여기서 내려간다.
-   debt=null → 무부채 가정. 상환능력 식(디딤돌 DTI / 은행 DSR)은 상품 데이터가 고른다. */
+   debt=null → 무부채 가정. 상환능력 식(디딤돌 DTI / 은행 DSR)은 상품 데이터가 고른다.
+   parts·binding까지 돌려준다 — 카드가 "무엇이 벽인가"를 부채 입력 전에도 말할 수 있게. */
 export function roughLimit(judged, f) {
-  return limitParts(PRODUCTS[judged.product], f.price, f.income, null, judged.limit).limit;
+  return limitParts(PRODUCTS[judged.product], f.price, f.income, null, judged.limit);
 }
 
-/* 전 상품 판정 → { passed(대략 한도 높은 순), others(근접 순), all }.
+/* 판정 대상 규칙 묶음 → { passed(대략 한도 높은 순), others(근접 순), all }.
+   rules 기본값 = 전 상품(지도·조종간). 탭은 자기 묶음만 넘긴다(정부 GOV_RULES / 은행 BANK_RULES).
    ⚠️ 가능한 걸 하나로 좁히지 않는다. 통과한 건 전부 passed에 담아 그대로 보여준다. */
-export function judgeAll(f) {
-  const all = PRODUCT_RULES.filter((r) => r.enabled).map((r) => {
+export function judgeAll(f, rules = PRODUCT_RULES) {
+  const all = rules.filter((r) => r.enabled).map((r) => {
     const j = judgeRule(r, f);
-    return { ...j, rough: j.ok ? roughLimit(j, f) : 0 };
+    const at = j.ok ? roughLimit(j, f) : null;
+    return { ...j, rough: at?.limit ?? 0, roughParts: at?.parts ?? [], roughBinding: at?.binding ?? null };
   });
   return {
     all,
@@ -366,5 +390,5 @@ export function judgeAll(f) {
 /* 소득이 어느 상품 소득상한의 언저리면 "경계"다 → 배우자 소득 정밀 입력을 펼친다.
    이 구간은 상한 위/아래로 가능 목록 자체가 갈려서, 밴드 대표값으로 두면 답이 틀린다. */
 export function nearIncomeCap(all, income) {
-  return all.some((j) => Math.abs(income - j.income.value) <= INCOME_EDGE_MARGIN);
+  return all.some((j) => j.income.value != null && Math.abs(income - j.income.value) <= INCOME_EDGE_MARGIN);
 }

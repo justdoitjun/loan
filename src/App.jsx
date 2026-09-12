@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
-import { DATA, RULE, C, COLOR_VALUE, COLOR_TEXT, DONG_LABELS } from "./data.js";
+import { DATA, RULE, C } from "./data.js";
 import { evaluate, repaymentCapacity, buildCtx, won } from "./engine.js";
-import { AppShell, BackButton, Slider, eyebrow, h1, card, primaryBtn, ghostBtn, listItem, modalOpt, fine } from "./ui.jsx";
+import { AppShell, Slider, eyebrow, h1, ghostBtn, listItem, modalOpt, fine } from "./ui.jsx";
 import { EMPTY_PERSON, personReady } from "./person.js";
 import { judgeUnits } from "./verdict.js";
 import Eligibility from "./Eligibility.jsx";
@@ -14,13 +14,8 @@ export default function App() {
   const setElig = (v) => patch("elig", v);
   const setDetail = (v) => patch("detail", v);
   const setPull = (v) => patch("pull", v);
-  const { ownIncome: income, cash } = person;
+  const { ownIncome: income } = person;
   const [step, setStep] = useState("budget");
-  /* 소득·현금도 부채 슬라이더와 같은 원칙 — 0(맨 왼쪽)에서 시작하고, 아직 "확정"은 안 된 상태.
-     budgetConfirmed가 켜지기 전엔 지도가 실제 색으로 안 물든다(아래 shellResults) —
-     리빌은 슬라이더를 만지작거리는 중이 아니라 "이걸로 볼게요"라고 확정한 순간 일어난다. */
-  const [budgetConfirmed, setBudgetConfirmed] = useState(false);
-  const [selectedId, setSelectedId] = useState(null);  // 지도 인라인 상세
   const [modalUnit, setModalUnit] = useState(null);    // 정부/은행 선택 팝업
   const [unit, setUnit] = useState(null);              // 고른 매물
   const [kind, setKind] = useState("gov");             // 정부 | 은행
@@ -28,25 +23,23 @@ export default function App() {
 
   const incomeTrustResult = incomeCheckResult(person.incomeCheck); // null | { tone, type, notes }
 
-  /* ── 지도 채색: 대략(천장) → 정밀(매물별 판정) 두 모드 ──
-     자격 답변 전엔 상품 판정을 돌릴 수 없으니 기존대로 DSR 근사 천장으로 칠한다.
+  /* ── 매물별 대출·필요 현금: 대략(천장) → 정밀(매물별 판정) 두 모드 ──
+     자격 답변 전엔 상품 판정을 돌릴 수 없으니 DSR 근사 천장으로 본다.
      자격이 다 차는 순간 precise가 켜지고, 그때부터 모든 매물이 judgeUnit을 거친다 —
-     실제 자격·상품별 한도·레버까지 반영된 색이다. 레버를 당기면 이 배열이 통째로 다시 나온다. */
+     실제 자격·상품별 한도·레버까지 반영된 숫자다. 레버를 당기면 이 배열이 통째로 다시 나온다. */
   const dsrCap = useMemo(() => repaymentCapacity(income, RULE.DSR, RULE.loanRate, RULE.loanYears, 0), [income]);
   const precise = personReady(person);
   const results = useMemo(
-    () => (precise ? judgeUnits(DATA, person) : DATA.map((d) => evaluate(d, dsrCap, cash))),
-    [precise, person, dsrCap, cash],
+    () => (precise ? judgeUnits(DATA, person) : DATA.map((d) => evaluate(d, dsrCap))),
+    [precise, person, dsrCap],
   );
-  /* 확정 전의 지도 — 실제 색 대신 회색 껍데기. 슬라이더를 옮기는 중엔 아직 안 보여주고,
-     "이 조건으로 알아볼게요"를 눌러야 비로소 켜진다(한 번의 리빌). */
-  const shellResults = useMemo(() => results.map((r) => ({ ...r, color: "grey" })), [results]);
-  const shownResults = budgetConfirmed ? results : shellResults;
-  const selected = results.find((r) => r.id === selectedId) || null;
-  const reachable = results.filter((r) => r.color === "green" || r.color === "amber").sort((a, b) => a.price - b.price);
+  const listed = useMemo(
+    () => [...results].sort((a, b) => a.cashNeeded - b.cashNeeded || a.price - b.price),
+    [results],
+  );
 
   /* 뒤 화면 전부가 공유하는 컨텍스트. 여기 담긴 건 절대 다시 묻지 않는다. */
-  const ctx = useMemo(() => (unit ? buildCtx({ unit, cash, ownIncome: income, elig: person.elig }) : null), [unit, cash, income, person.elig]);
+  const ctx = useMemo(() => (unit ? buildCtx({ unit, ownIncome: income, elig: person.elig }) : null), [unit, income, person.elig]);
 
   /* 팝업에서 정부/은행을 고르면 자격 화면으로.
      ⚠️ 여기서 사람 상태를 하나도 지우지 않는다 — 자격도 부채도 레버도 매물과 무관하기 때문.
@@ -69,7 +62,7 @@ export default function App() {
   function swapUnit(id) {
     const next = DATA.find((d) => d.id === id);
     if (!next) return;
-    setUnit(next); setSelectedId(id); setPickedKey(null);
+    setUnit(next); setPickedKey(null);
   }
 
   return (
@@ -77,14 +70,9 @@ export default function App() {
       {step === "budget" && (
         <>
           <div style={eyebrow}>노원구 · 그린라이트</div>
-          <h1 style={h1}>내가 살 수 있는 집은?</h1>
-          {/* mode를 넘겨서 대략→정밀 전환 때 점들이 한 번 더 물들게 한다(기존 pop 애니메이션 재사용) */}
-          <Map results={shownResults} mode={precise ? "precise" : "rough"} selectedId={selectedId} onPick={setSelectedId} />
-          <Legend />
-          {precise && <PreciseNote />}
+          <h1 style={h1}>내 소득으로,<br />필요한 현금을 알아봐요.</h1>
           <div style={{ marginTop: 16 }}>
             <Slider label="나의 연소득" value={income} min={0} max={12000} step={100} onChange={(v) => patch("ownIncome", v)} display={won(income) + "원"} />
-            <Slider label="보유 현금" value={cash} min={0} max={70000} step={500} onChange={(v) => patch("cash", v)} display={won(cash) + "원"} />
           </div>
 
           <button onClick={() => setStep("incomeCheck")} style={{ ...ghostBtn, width: "100%", marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -94,49 +82,26 @@ export default function App() {
             </span>
           </button>
 
-          {!budgetConfirmed ? (
-            <div style={{ ...card, marginTop: 16 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.5 }}>
-                연소득 {won(income)}원 · 현금 {won(cash)}원 — 이 소득과 현금으로 알아볼까요?
-              </div>
-              <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 5, marginBottom: 13, lineHeight: 1.55 }}>
-                슬라이더를 옮겨서 맞추고 확인하면, 지도에 살 수 있는 집이 바로 켜져요.
-              </div>
-              <button onClick={() => setBudgetConfirmed(true)} style={primaryBtn}>네, 이걸로 알아볼게요</button>
-            </div>
-          ) : (
-            <>
-              <div style={{ ...card, marginTop: 16, minHeight: 100, borderColor: selected ? COLOR_VALUE[selected.color] : C.line, transition: "border-color .3s" }}>
-                {!selected ? <div style={{ color: C.inkSoft, fontSize: 14, paddingTop: 6 }}>지도에서 단지를 눌러보세요. 당신 예산에서 어떻게 보이는지 알려드릴게요.</div> : <Detail r={selected} />}
-              </div>
+          {/* {precise && <PreciseNote />} */}
 
-              <button onClick={() => setStep("list")} style={primaryBtn}>가능한 매물목록 확인하기 →</button>
-              <p style={fine}>기존 대출을 0으로 둔 상한선이라 실제 한도는 이보다 낮게 나올 수 있어요. 실거래가 기반 근사치예요. 정확한 담보평가·대출 가부는 상담역이 확정합니다. 데이터·대출 규칙 일부는 예시값이에요. 이 화면은 대출을 약속하지 않아요.</p>
-            </>
-          )}
-        </>
-      )}
-
-      {step === "list" && (
-        <div className="slideup">
-          <BackButton onClick={() => setStep("budget")}>지도로</BackButton>
-          <div style={eyebrow}>가능한 매물</div>
-          <h1 style={h1}>지금 예산으로<br />가능해요.</h1>
-          <p style={{ fontSize: 13, color: C.inkSoft, margin: "0 0 14px" }}>하나를 고르면 어떤 대출로 갈지 함께 정해드려요.</p>
-          {reachable.length === 0 && <div style={{ ...card, color: C.inkSoft, fontSize: 14 }}>지금은 닿는 매물이 없어요. 지도 화면에서 소득·현금을 조정해보세요.</div>}
-          {reachable.map((r) => (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "16px 0 10px" }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: C.ink }}>총 {listed.length}건</span>
+            <span style={{ fontSize: 12, color: C.inkSoft }}>필요 현금 적은 순</span>
+          </div>
+          {listed.map((r) => (
             <button key={r.id} onClick={() => setModalUnit(r)} style={listItem}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <i style={{ width: 12, height: 12, borderRadius: "50%", background: COLOR_VALUE[r.color], flex: "0 0 auto" }} />
-                <div>
-                  <div style={{ fontSize: 15, color : C.inkSoft, fontWeight: 700 }}>{r.name}</div>
-                  <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 2 }}>{r.dong} · 전용 {r.areaM2}㎡ · {won(r.price)}원</div>
-                </div>
+              <div>
+                <div style={{ fontSize: 15, color: C.ink, fontWeight: 700 }}>{r.name}</div>
+                <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 2 }}>{r.dong} · 전용 {r.areaM2}㎡ · {won(r.price)}원</div>
+                <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 3 }}>대출 약 {won(r.loan)}원</div>
               </div>
-              <span style={{ fontSize: 13, color: r.color === "green" ? C.greenDeep : C.amber, fontWeight: 700 }}>{r.slack >= 0 ? `여유 ${won(r.slack)}` : `${won(r.slack)} 부족`} ›</span>
+              <span style={{ fontSize: 13, color: C.greenDeep, fontWeight: 700, textAlign: "right", flex: "0 0 auto" }}>
+                현금 {won(r.cashNeeded)} ›
+              </span>
             </button>
           ))}
-        </div>
+          <p style={fine}>상담역이 확정해요. 대출을 약속하지 않아요.</p>
+        </>
       )}
 
       {step === "incomeCheck" && (
@@ -145,10 +110,10 @@ export default function App() {
 
       {step === "eligibility" && ctx && (
         <Eligibility
-          unit={unit} cash={cash} ownIncome={income}
+          unit={unit} ownIncome={income}
           kind={kind} setKind={setKind}
           elig={person.elig} setElig={setElig}
-          onBack={() => setStep("list")} onPick={pickProduct} />
+          onBack={() => setStep("budget")} onPick={pickProduct} />
       )}
 
       {step === "strategy" && ctx && (
@@ -166,13 +131,21 @@ export default function App() {
 }
 
 function ProductModal({ r, onPick, onClose }) {
-  const toneColor = r.color === "green" ? C.greenDeep : r.color === "amber" ? "#9A6B12" : C.inkSoft;
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(20,30,26,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 18 }}>
       <div onClick={(e) => e.stopPropagation()} className="modal" style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 20, padding: "20px 20px 22px" }}>
-        <div style={{ fontSize: 12, color: toneColor, fontWeight: 700 }}>{COLOR_TEXT[r.color]}</div>
-        <div style={{ fontSize: 18, fontWeight: 800, marginTop: 4 }}>{r.name}</div>
+        <div style={{ fontSize: 18, fontWeight: 800 }}>{r.name}</div>
         <div style={{ fontSize: 13, color: C.inkSoft }}>{r.dong} · 전용 {r.areaM2}㎡ · {won(r.price)}원</div>
+        <div style={{ margin: "12px 0 4px", padding: "10px 12px", borderRadius: 12, background: "#F7FAF7", border: `1px solid ${C.line}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "2px 0" }}>
+            <span style={{ color: C.inkSoft }}>가능한 대출</span>
+            <span style={{ fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>약 {won(r.loan)}원</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "2px 0" }}>
+            <span style={{ color: C.inkSoft }}>필요 현금</span>
+            <span style={{ fontWeight: 800, color: C.greenDeep, fontVariantNumeric: "tabular-nums" }}>약 {won(r.cashNeeded)}원</span>
+          </div>
+        </div>
         <div style={{ fontSize: 13, color: C.ink, margin: "14px 0 12px", fontWeight: 600 }}>어떤 대출로 알아볼까요?</div>
         <button onClick={() => onPick("gov")} style={{ ...modalOpt, borderColor: C.greenDeep }}>
           <div style={{ fontSize: 15, fontWeight: 800 }}>정부대출 <span style={{ fontSize: 12, color: C.inkSoft, fontWeight: 600 }}>디딤돌·보금자리</span></div>
@@ -188,43 +161,11 @@ function ProductModal({ r, onPick, onClose }) {
   );
 }
 
-/* 대략 천장 → 매물별 정밀 판정으로 넘어갔다는 걸 숨기지 않는다.
-   같은 지도가 다른 근거로 칠해졌으면 그렇다고 말해야 한다(안 그러면 "아까랑 색이 다른데?"가 남는다). */
+/* 대략 천장 → 매물별 정밀 판정으로 넘어갔다는 걸 숨기지 않는다. */
 function PreciseNote() {
   return (
     <div className="slideup" style={{ marginTop: 10, padding: "9px 12px", borderRadius: 10, background: "#F7FAF7", border: `1px solid ${C.line}`, fontSize: 12, color: C.inkSoft, lineHeight: 1.6 }}>
-      <b style={{ color: C.greenDeep }}>자격 답변을 반영해서 다시 칠했어요.</b> 이제 소득 근사치가 아니라 <b>실제 자격·대출별 한도</b>로 본 색이에요. 전략에서 레버를 당기면 여기도 같이 움직여요.
+      <b style={{ color: C.greenDeep }}>자격 답변을 반영해서 다시 계산했어요.</b>
     </div>
   );
-}
-
-/* mode가 바뀌면 key가 바뀌어 점이 다시 마운트된다 → pop 애니메이션이 한 번 더 돈다.
-   색만 슬쩍 바꾸면 "판정 근거가 바뀌었다"는 사건이 안 보인다. 리빌은 두 번 일어나야 맞다. */
-function Map({ results, mode = "rough", selectedId, onPick }) {
-  return (
-    <div style={{ position: "relative", marginTop: 18, height: 320, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 18, overflow: "hidden" }}>
-      <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(#EEF2EE 1px,transparent 1px),linear-gradient(90deg,#EEF2EE 1px,transparent 1px)", backgroundSize: "38px 38px" }} />
-      {DONG_LABELS.map((d) => <span key={d.name} style={{ position: "absolute", left: `${d.x}%`, top: `${d.y}%`, transform: "translate(-50%,-50%)", fontSize: 11, color: "#AEB6B2", fontWeight: 600 }}>{d.name}</span>)}
-      {results.map((r, i) => { const on = selectedId === r.id; return <button key={`${mode}-${r.id}`} onClick={() => onPick(r.id)} aria-label={r.name} className="dot" style={{ position: "absolute", left: `${r.x}%`, top: `${r.y}%`, transform: `translate(-50%,-50%) scale(${on ? 1.35 : 1})`, width: 26, height: 26, borderRadius: "50%", cursor: "pointer", background: COLOR_VALUE[r.color], border: `2px solid ${on ? C.ink : "#fff"}`, boxShadow: on ? "0 4px 14px rgba(0,0,0,.22)" : "0 1px 3px rgba(0,0,0,.14)", animationDelay: `${i * 45}ms`, zIndex: on ? 5 : 1 }} />; })}
-    </div>
-  );
-}
-
-function Legend() {
-  return <div style={{ display: "flex", gap: 16, marginTop: 12, fontSize: 12, color: C.inkSoft }}>
-    {[["green", "살 수 있어요"], ["amber", "경계"], ["grey", "지금은 무리"]].map(([k, t]) => <span key={k} style={{ display: "flex", alignItems: "center", gap: 6 }}><i style={{ width: 11, height: 11, borderRadius: "50%", background: COLOR_VALUE[k], display: "inline-block" }} />{t}</span>)}
-  </div>;
-}
-
-function Detail({ r }) {
-  const limitNote = r.limitedBy === "ltv" ? "담보(LTV) 한도에서 먼저 걸려요. 소득을 올려도 이 벽은 안 내려가고, 현금 비중을 높여야 열려요." : "소득이 늘면 열려요. (배우자 합산 소득도 가능해요.) ";
-  return <div>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-      <div style={{ fontSize: 17, fontWeight: 800 }}>{r.name}</div><div style={{ fontSize: 13, color: C.inkSoft }}>{r.dong} · 전용 {r.areaM2}㎡</div>
-    </div>
-    <div style={{ fontSize: 20, fontWeight: 800, margin: "4px 0 10px", fontVariantNumeric: "tabular-nums" }}>{won(r.price)}원</div>
-    {r.color === "green" && <div style={{ fontSize: 14, color: C.greenDeep, lineHeight: 1.6 }}><b>예산 안에 들어와요.</b> 약 {won(r.slack)}원 여유가 있어요.</div>}
-    {r.color === "amber" && <div style={{ fontSize: 14, color: "#9A6B12", lineHeight: 1.6 }}><b>경계선이에요.</b> 전략을 세우면 열릴 수 있어요. {limitNote}</div>}
-    {r.color === "grey" && <div style={{ fontSize: 14, color: C.inkSoft, lineHeight: 1.6 }}><b>약 {won(-r.slack)}원 부족해요.</b> {limitNote}</div>}
-  </div>;
 }

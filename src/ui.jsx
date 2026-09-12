@@ -18,8 +18,10 @@ export const fine = { fontSize: 11, color: "#9AA3A0", marginTop: 16, lineHeight:
 export const inputBox = { width: "100%", padding: "10px 12px", fontSize: 15, borderRadius: 10, border: `1.5px solid ${C.line}`, boxSizing: "border-box" };
 
 export const css = `
-  input[type=range]{-webkit-appearance:none;appearance:none;height:6px;border-radius:4px;background:#DCE3DE;outline:none;}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:22px;height:22px;border-radius:50%;background:#14705A;cursor:pointer;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.25);}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:6px;border-radius:4px;outline:none;}
+  input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:4px;background:transparent;}
+  input[type=range]::-moz-range-track{height:6px;border-radius:4px;background:transparent;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:22px;height:22px;border-radius:50%;background:#14705A;cursor:pointer;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.25);margin-top:-8px;}
   input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#14705A;cursor:pointer;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.25);}
   .dot{transition:background-color .5s ease,transform .2s ease;animation:pop .4s ease backwards;}
   .dot:focus-visible{outline:3px solid #14705A;outline-offset:2px;}
@@ -33,6 +35,11 @@ export const css = `
   .acc{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s ease;}
   .acc[data-open="true"]{grid-template-rows:1fr;}
   .acc>.acc-inner{overflow:hidden;}
+
+  /* 게이지: 대출이 채운 칸 옆의 빗금 = 필요 현금. 경고색이 아니다. */
+  .stripe-gap{background:repeating-linear-gradient(-45deg,#E6EBE7,#E6EBE7 6px,#F4F7F4 6px,#F4F7F4 12px);}
+  .stripe-off{background:repeating-linear-gradient(-45deg,#E8ECE8,#E8ECE8 6px,#F2F4F2 6px,#F2F4F2 12px);}
+  .gauge-fill{transition:width .38s ease;}
 
   @media (prefers-reduced-motion: reduce){
     .dot,.slideup,.modal{animation:none;}
@@ -59,13 +66,19 @@ export function Stat({ label, value, warn }) {
   return <div><div style={{ fontSize: 11, color: C.inkSoft }}>{label}</div><div style={{ fontSize: 15, fontWeight: 800, color: warn ? C.amber : C.ink }}>{value}</div></div>;
 }
 
+export function rangeFill(value, min, max) {
+  const span = max - min;
+  const pct = span > 0 ? Math.min(100, Math.max(0, ((value - min) / span) * 100)) : 0;
+  return { width: "100%", background: `linear-gradient(to right, ${C.greenDeep} ${pct}%, #DCE3DE ${pct}%)` };
+}
+
 export function Slider({ label, value, min, max, step, onChange, display }) {
   return <div style={{ marginBottom: 12 }}>
     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
       <span style={{ fontSize: 13, color: C.inkSoft, fontWeight: 600 }}>{label}</span>
       <span style={{ fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{display}</span>
     </div>
-    <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} style={{ width: "100%" }} />
+    <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} style={rangeFill(value, min, max)} />
   </div>;
 }
 

@@ -17,14 +17,15 @@
 - 솔직한 반대/지적을 환영함. 예스맨 금지.
 
 ## 규칙
-@.claude/rules/_common.md
 @.claude/rules/_policy.md
 @.claude/rules/guardrails.md
 @.claude/rules/architecture.md
 @.claude/rules/ux.md
-@.claude/rules/products/didimdol.md
-@.claude/rules/products/bank.md
-@.claude/rules/products/bogeumjari.md
+@.claude/rules/products/_common.md
+@.claude/rules/products/gov/gov_common.md
+@.claude/rules/products/gov/didimdol.md
+@.claude/rules/products/gov/bogeumjari.md
+@.claude/rules/products/bank/bank.md
 
 
 ## 지금 검증 상태 (중요)
@@ -32,7 +33,8 @@
 **상품 숫자의 검증 상태는 상품마다 다르다. 상품별 규칙 문서의 "검증 대기 목록"이 단일 출처다.**
 디딤돌 기준: **부부합산 소득상한만 규정 원문으로 확인됨**(✅ — 원문 `rules_didimdol.xlsx`).
 가격·면적·대출한도 cap·LTV·방공제·금리·DTI상한은 **전부 가정치**(⚠️).
-→ `products/didimdol.md` 8절. 보금자리·은행은 아직 규칙 문서 자체가 스텁이다.
+→ `products/gov/didimdol.md`. 보금자리는 아직 규칙 문서가 스텁이다.
+은행 기준: 진입 조건(주택 보유 상태)·지역별 cap은 `_common.md` 표(✅), DSR 파라미터(산정만기·스트레스·부채 환산)는 **전부 가정치**(⚠️) → `products/bank/bank.md` 6절.
 
 ## 다음 할 일 (TODO)
 
@@ -42,17 +44,17 @@
    - **디딤돌에선 DTI가 사실상 벽이 아니다.** DTI 60%·30년·3.0%면 무부채 한도 ≈ 연소득 × 11.86배.
      연소득 5,000만·기타부채 2,000만이면 DTI 한도 5.72억 > 경로 cap 2.5억. cap 2.5억보다 DTI가
      먼저 걸리려면 무부채 기준 **연소득 약 2,110만원 이하**여야 한다.
-     즉 거의 항상 **cap이나 LTV**가 먼저 걸리고 부채 레버는 결과를 못 움직인다
-     (조종간이 `leversInert`로 정직하게 표시). **이건 버그가 아니라 디딤돌의 실제 성질일 수 있다** —
-     현직 판단으로 확정할 것. 부채 레버가 진짜 살아나는 건 DSR 40%를 쓰는 **은행탭**(TODO 4)이다.
+     즉 거의 항상 **cap이나 LTV**가 먼저 걸리고 기존 대출을 줄여도 필요 현금이 안 줄어든다
+     (방법 화면이 `leversInert`로 정직하게 표시). **이건 버그가 아니라 디딤돌의 실제 성질일 수 있다** —
+     현직 판단으로 확정할 것. 기존 대출을 줄이는 가정이 진짜 살아나는 건 DSR 40%를 쓰는 **은행탭**(TODO 4)이다.
    - 원문엔 7,000만 소득상한에 **다자녀가구·전세사기피해자**도 같이 묶여 있는데 코드엔 그 플래그가 없다
      (`didimdol.md` ❓ 2번). 별도 티어로 팔지 판단할 것.
 2. **보금자리 규칙 문서를 채우고**(`products/bogeumjari.md`) 그다음 코드 숫자를 맞춘다 — 문서가 먼저다.
    보금자리도 실제로는 DTI 상품이다 → `capacityModel: "fundDTI"`로 옮길지 판단할 것
    (지금은 정정 범위를 디딤돌로 한정해서 DSR 잣대에 남아 있다).
 3. **본격 비교** — 순위 반응 섹션에 금리·총이자·실행시점 축 추가(지금은 한도 축만).
-4. **은행탭** — `products/bank.md`를 먼저 채우고 → `src/products/bank.js` +
-   `DEBT_VIEW.bank = "principalAndInterest"` + 탭 연결(일반 주담대, MCI 방공제 상쇄, DSR 40%, 실행 빠름).
+4. **은행탭** — 연결 완료(`eligibility/bank.jsx` · `products/bank.js` · `PRODUCTS.bank`). 남은 건 숫자 검증뿐이고
+   목록은 `products/bank/bank.md` 6절이 갖는다. 사람만 정할 수 있는 것: DSR 산정만기(30년 고정 vs 실제 만기 입력)·스트레스 금리.
 5. 노원 실거래가 추정값을 실제 값으로 교체(`data.DATA` 10개 단지).
 6. 소득의 질(노랑)을 **문구만이 아니라 숫자에도** 반영할지 결정 — 지금은 색만 물들이고 한도는 안 깎는다.
    깎으려면 인정률 가정이 필요한데 그건 가상값을 하나 더 만드는 일이라 일부러 보류했다.

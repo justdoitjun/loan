@@ -169,7 +169,7 @@ export default function IncomeCheck({ value, onChange, onBack }) {
         </div>
       )}
 
-      <p style={fine}>※ 여기 판정은 규정을 바탕으로 한 가능성 안내예요. 정확한 소득 인정 여부와 서류는 상담역이 확정해드려요. 입력한 답은 이 화면 밖으로 나가지 않아요.</p>
+      <p style={fine}>상담역이 확정해요. 대출을 약속하지 않아요.</p>
     </div>
   );
 }

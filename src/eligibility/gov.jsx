@@ -1,8 +1,10 @@
 import { useRef, useState } from "react";
 import { SPOUSE_INCOME_BANDS, NO_HOME_EXCEPTION, C } from "../data.js";
-import { deriveFacts, judgeAll, nearIncomeCap, won, eok } from "../engine.js";
-import { bucketOf, filledAge, eligSteps } from "../person.js";
+import { deriveFacts, judgeAll, nearIncomeCap, won, eok, cashNeededOf } from "../engine.js";
+import { GOV_RULES } from "../products/index.js";
+import { bucketOf, filledAge, eligSteps, withSpouse } from "../person.js";
 import { Section, ClosedCard, Placeholder, eyebrow, h1, card, fine, inputBox, pill } from "../ui.jsx";
+import { YesNo, SpouseIncomeTrack, AnswersDropdown, SkippedNote } from "./shared.jsx";
 
 const MARITAL_BUCKETS = [
   { key: "planned", label: "곧 할 거예요",             desc: "예비배우자 소득까지 합산해서 봐요. 3개월 이내인지는 상담 때 확인해요", marital: "planned", within7: null,  needsSpouse: false },
@@ -45,16 +47,7 @@ export default function Gov({ ctx, elig, setElig, onPick }) {
 
   /* 배우자 토글은 뒤 질문들과 모순을 만들 수 있다 → 바뀌는 순간 어긋난 답만 조용히 비운다.
      (경고를 띄우고 사용자에게 치우게 하는 것보다, 애초에 모순이 못 남게 하는 쪽) */
-  const setHasSpouse = (v) => setElig((s) => {
-    const next = { ...s, hasSpouse: v };
-    if (v === false) {
-      next.spouseBirthday = "";
-      /* 결혼예정은 '배우자 없음'과 모순이 아니다(예비배우자) → 그 소득은 계속 합산 대상이라 안 지운다 */
-      if (s.marital !== "planned") { next.spouseBand = null; next.spouseIncomeRaw = ""; }
-      if (s.marital === "married") { next.marital = null; next.marriedWithin7 = null; }
-    } else if (s.marital === "single") { next.marital = null; next.marriedWithin7 = null; }
-    return next;
-  });
+  const setHasSpouse = (v) => setElig((s) => withSpouse(s, v));   // 정리 규칙은 person.withSpouse 한 곳(은행탭도 같은 토글)
 
   const pickBucket = (b) => setElig((s) => ({ ...s, marital: b.marital, marriedWithin7: b.within7 }));
   const pickBand = (k) => setElig((s) => ({ ...s, spouseBand: k, spouseIncomeRaw: "" })); // 밴드 바뀌면 정밀값 무효
@@ -71,7 +64,7 @@ export default function Gov({ ctx, elig, setElig, onPick }) {
 
   /* 경계 판정은 지금 답만으로 한 판정 결과를 근거로 한다(밴드 대표값 기준).
      이미 정밀값을 넣었으면 상한이 움직여도 칸을 닫지 않는다 — 입력값 유실 방지. */
-  const { all, passed, others } = judgeAll(facts);
+  const { all, passed, others } = judgeAll(facts, GOV_RULES);   // 정부탭 = 정부 규칙만(은행 카드가 섞이지 않게)
   const onEdge = spouseCounted && elig.spouseBand !== null && nearIncomeCap(all, ctx.totalIncome);
   const showPrecise = onEdge || elig.spouseIncomeRaw !== "";
 
@@ -132,8 +125,8 @@ export default function Gov({ ctx, elig, setElig, onPick }) {
                     <SpouseIncomeTrack value={elig.spouseBand} onPick={pickBand} ownIncome={ownIncome} planned={elig.marital === "planned"} />
                     {showPrecise && (
                       <div className="slideup" style={{ marginBottom: 14, padding: "12px 14px", borderRadius: 12, background: "#F7FAF7", border: `1px solid ${C.line}` }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.greenDeep, marginBottom: 4 }}>소득상한 경계에 걸쳐 있어요</div>
-                        <div style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.55, marginBottom: 8 }}>이 구간은 상한을 넘느냐 마느냐로 가능한 대출 자체가 갈려요. 배우자 세전 연소득을 정확히 넣으면 더 좁혀서 보여드릴게요. 비워두면 구간 대표값으로 계산해요.</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.greenDeep, marginBottom: 4 }}>소득상한 경계</div>
+                        <div style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.55, marginBottom: 8 }}>정확한 금액을 넣으면 더 좁혀요.</div>
                         <input type="number" inputMode="numeric" placeholder="예: 4000" value={elig.spouseIncomeRaw} onChange={(e) => set("spouseIncomeRaw", e.target.value)} style={inputBox} />
                       </div>
                     )}
@@ -160,11 +153,11 @@ export default function Gov({ ctx, elig, setElig, onPick }) {
             {!facts.householdHead && <NoHouseholdHeadNote age={facts.age} />}
             <Results ctx={ctx} passed={passed} others={others} onPick={onPick} />
           </div>
-        : familyReady && <Section title="가능한 대출" subtitle="위 항목을 채우면 바로 판정해 드려요.">
-            <Placeholder>가족정보·무주택·생애최초·결혼여부가 채워지면 <b>조건이 되는 대출을 전부</b> 보여드려요. 하나로 좁히지 않아요.</Placeholder>
+        : familyReady && <Section title="가능한 대출">
+            <Placeholder>위를 채우면 계산해요.</Placeholder>
           </Section>)}
 
-      <p style={fine}>※ 자격 상한·한도 숫자는 전부 가상 예시예요. 실제 규정 값으로 교체 예정. 여기 넣은 값은 이 화면 밖으로 나가지 않아요. 대출 가부는 상담역이 확정하며, 이 화면은 대출을 약속하지 않아요.</p>
+      <p style={fine}>상담역이 확정해요. 대출을 약속하지 않아요.</p>
     </>
   );
 }
@@ -297,47 +290,6 @@ function FieldRow({ label, hint, children }) {
 
 const Divider = () => <div style={{ borderTop: `1px solid ${C.line}`, margin: "14px 0" }} />;
 
-/* ── 다 채운 질문 더미를 접는 드랍다운 ──
-   접어도 무엇으로 판정했는지는 남긴다. 펼치면 답을 고칠 수 있다. */
-function AnswersDropdown({ open, onToggle, rows }) {
-  return (
-    <div style={{ ...card, padding: "12px 16px", marginBottom: 16 }}>
-      <button onClick={onToggle} aria-expanded={open}
-        style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: 0, border: "none", background: "none", cursor: "pointer", textAlign: "left" }}>
-        <span style={{ fontSize: 13, fontWeight: 800, color: C.greenDeep }}>입력한 조건</span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: C.inkSoft, display: "flex", alignItems: "center", gap: 4 }}>
-          {open ? "접기" : "고치기"}
-          <span style={{ display: "inline-block", transform: open ? "rotate(180deg)" : "none", transition: "transform .2s ease" }}>▾</span>
-        </span>
-      </button>
-      {!open && (
-        <div style={{ marginTop: 8 }}>
-          {rows.map(([k, v]) => (
-            <div key={k} style={{ display: "flex", gap: 10, fontSize: 12, lineHeight: 1.6, marginBottom: 3 }}>
-              <span style={{ color: C.inkSoft, flex: "0 0 74px" }}>{k}</span>
-              <span style={{ flex: 1 }}>{v}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── 2·3·6) 단일 yes/no. 부연은 버튼이 아니라 설명문이 진다. ── */
-function YesNo({ label, desc, value, onPick, yes = "네", no = "아니오" }) {
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 14, color: C.ink, fontWeight: 700, marginBottom: desc ? 3 : 7 }}>{label}</div>
-      {desc && <div style={{ fontSize: 12, color: C.inkSoft, marginBottom: 8, lineHeight: 1.55 }}>{desc}</div>}
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={() => onPick(true)} style={pill(value === true)}>{yes}</button>
-        <button onClick={() => onPick(false)} style={pill(value === false)}>{no}</button>
-      </div>
-    </div>
-  );
-}
-
 /* ── 4) 결혼여부 4버킷 ──
    가족정보와 모순되는 선택지는 눌리지 않게 막고, 왜 막혔는지 그 자리에서 말한다. */
 function MaritalChoice({ bucket, hasSpouse, onPick }) {
@@ -364,53 +316,13 @@ function MaritalChoice({ bucket, hasSpouse, onPick }) {
   );
 }
 
-/* ── 5) 배우자 소득 밴드 트랙 ──
-   본인 소득은 앞 예산 화면에서 이미 받았다. 여기서 다시 묻지 않는다. */
-function SpouseIncomeTrack({ value, onPick, ownIncome, planned }) {
-  const picked = SPOUSE_INCOME_BANDS.find((b) => b.key === value) || null;
-  const who = planned ? "예비배우자" : "배우자";
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 14, color: C.ink, fontWeight: 700, marginBottom: 3 }}>{who} 세전 연소득은 어느 구간인가요?</div>
-      <div style={{ fontSize: 12, color: C.inkSoft, marginBottom: 8, lineHeight: 1.55 }}>
-        본인 소득 {won(ownIncome)}원은 앞에서 이미 받았어요. {who} 몫만 구간으로 골라주세요.
-        {planned && " 결혼예정이면 예비배우자 소득까지 합산해서 보거든요 — 빼고 계산하면 나중에 한도가 달라져요."}
-      </div>
-      <div style={{ display: "flex", border: `1.5px solid ${C.line}`, borderRadius: 12, overflow: "hidden" }}>
-        {SPOUSE_INCOME_BANDS.map((b, i) => {
-          const on = value === b.key;
-          return (
-            <button key={b.key} onClick={() => onPick(b.key)} aria-pressed={on}
-              style={{ flex: 1, padding: "12px 4px", fontSize: 13, fontWeight: 700, cursor: "pointer", border: "none",
-                borderLeft: i > 0 ? `1px solid ${on || value === SPOUSE_INCOME_BANDS[i - 1].key ? "transparent" : C.line}` : "none",
-                background: on ? C.greenDeep : "#fff", color: on ? "#fff" : C.inkSoft, fontVariantNumeric: "tabular-nums" }}>
-              {b.short}
-            </button>
-          );
-        })}
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#9AA3A0", marginTop: 5 }}>
-        <span>적음</span><span>많음</span>
-      </div>
-      {picked && (
-        <div className="slideup" style={{ fontSize: 12, color: C.inkSoft, marginTop: 4, lineHeight: 1.55 }}>
-          {picked.label} 선택 · 계산은 구간 대표값 <b>약 {won(picked.rep)}원</b>으로 봐요. 경계에 걸리면 정확한 값을 따로 여쭤볼게요.
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ── 세대주 추정에 붙는 노랑 안내 ──
    세대주를 직접 묻지 않기로 한 대가다. 추정으로 계산해놓고 확답하지 않는다(가드레일 3). */
 function SoleHouseholdNote() {
   return (
-    <Section title="단독세대 여부는 상담역이 확인해드려요" tone="warn"
-      subtitle="배우자도 미성년 자녀도 없고 만 30세가 넘어서, 디딤돌의 '만30세 이상 단독세대주'로 보고 계산했어요.">
+    <Section title="단독세대는 상담역이 확인해요" tone="warn">
       <div style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.65 }}>
-        이 구간은 가격·면적·한도에 별도 상한이 붙어요(예: 전용 60㎡·3억 이하). 그런데 등본상 실제 세대 구성은 저희가 알 수 없어요 —
-        부모님과 같은 세대로 묶여 있거나, 반대로 부양가족이 잡혀 있으면 적용 기준이 바뀝니다.
-        <b style={{ color: C.ink }}> 아래 결과는 그 가정 위에서 나온 값이고, 확정은 상담역이 등본을 보고 해드려요.</b>
+        만 30세 이상 단독세대로 보고 계산했어요. 등본 구성이 다르면 기준이 바뀝니다.
       </div>
     </Section>
   );
@@ -418,11 +330,9 @@ function SoleHouseholdNote() {
 
 function NoHouseholdHeadNote({ age }) {
   return (
-    <Section title="세대주 요건이 아직 안 잡혀요" tone="warn"
-      subtitle={`만 ${age}세이고 부양가족이 없어서, 디딤돌 세대주 요건이 원칙적으로는 안 걸려요.`}>
+    <Section title="세대주 요건이 아직 안 잡혀요" tone="warn">
       <div style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.65 }}>
-        다만 닫힌 건 아니에요. <b style={{ color: C.ink }}>미성년 형제자매나 직계존속을 6개월 이상 부양하는 세대주</b>라면 열릴 수 있어요 —
-        이건 등본으로 상담역이 확인해드려요. 만 30세가 되는 시점, 혼인신고 시점도 같이 짚어보면 좋아요.
+        만 {age}세, 부양가족 없음. 미성년 형제·직계존속을 6개월 이상 부양하면 열릴 수 있어요.
       </div>
     </Section>
   );
@@ -433,11 +343,8 @@ function Results({ ctx, passed, others, onPick }) {
   if (passed.length === 0) return <><NoneCard others={others} ctx={ctx} />{others.length > 0 && <OthersNote others={others} />}</>;
   return (
     <>
-      <Section title={`가능한 대출 ${passed.length}가지`} subtitle="하나로 좁히지 않았어요. 조건이 되는 건 전부입니다. 대략 한도 높은 순." tone="ok">
+      <Section title={`가능한 대출 ${passed.length}가지`} tone="ok">
         {passed.map((p, i) => <ProductCard key={p.key} p={p} ctx={ctx} best={i === 0} onPick={onPick} />)}
-        <div style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.6 }}>
-          여기 한도는 <b>기존 대출을 0으로 둔 천장</b>이에요. 하나를 고르면 다음 화면에서 부채·소득을 받아 구체적으로 좁혀드려요.
-        </div>
       </Section>
       {others.length > 0 && <OthersNote others={others} />}
     </>
@@ -445,6 +352,7 @@ function Results({ ctx, passed, others, onPick }) {
 }
 
 function ProductCard({ p, ctx, best, onPick }) {
+  const cash = cashNeededOf(ctx.unit.price, p.rough);
   return (
     <button onClick={() => onPick(p.key)}
       style={{ width: "100%", textAlign: "left", marginBottom: 10, padding: "13px 15px", borderRadius: 13, cursor: "pointer", border: `1.5px solid ${best ? C.greenDeep : C.line}`, background: best ? "#F3F9F5" : "#fff" }}>
@@ -454,14 +362,14 @@ function ProductCard({ p, ctx, best, onPick }) {
         </span>
         <span style={{ fontSize: 15, fontWeight: 800, color: C.greenDeep, fontVariantNumeric: "tabular-nums" }}>약 {eok(p.rough)}</span>
       </div>
+      <div style={{ fontSize: 12, color: C.greenDeep, fontWeight: 700, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>
+        현금 약 {won(cash)}원
+      </div>
       <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 4, lineHeight: 1.6 }}>
         금리 {p.rateLabel} · 실행 {p.leadTime} · 최대 {won(p.limit)}
       </div>
-      <div style={{ fontSize: 12, color: C.greenDeep, marginTop: 4, lineHeight: 1.6 }}>
-        → 합산소득 {won(ctx.totalIncome)} ≤ 상한 {won(p.income.value)}({p.income.label}), 시세 {won(ctx.unit.price)} ≤ 상한 {won(p.price.value)}({p.price.label})라 열려요.
-      </div>
       {p.note && <div style={{ fontSize: 12, color: "#9AA3A0", marginTop: 4, lineHeight: 1.6 }}>{p.note}</div>}
-      <div style={{ fontSize: 12, color: C.greenDeep, fontWeight: 800, marginTop: 7 }}>이걸로 전략 보기 →</div>
+      <div style={{ fontSize: 12, color: C.greenDeep, fontWeight: 800, marginTop: 7 }}>이걸로 볼게요 →</div>
     </button>
   );
 }
@@ -470,7 +378,7 @@ function ProductCard({ p, ctx, best, onPick }) {
 function NoneCard({ others, ctx }) {
   const near = others[0];
   return (
-    <Section title="지금 조건에 딱 맞는 대출은 없어요" subtitle="하지만 여기서 끝이 아니에요. 가장 가까운 대출을 짚어드릴게요." tone="warn">
+    <Section title="지금 맞는 대출은 없어요" tone="warn">
       {near && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>가장 근접: {near.title}</div>
@@ -489,11 +397,8 @@ function NoneCard({ others, ctx }) {
           ))}
         </div>
       )}
-      <div style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.65, paddingTop: 10, borderTop: `1px solid ${C.line}` }}>
-        자격 요건에서 막혔다면 시점 문제일 수 있어요 — 혼인신고일, 자녀 출생일, 세대 구성이 곧 바뀌는지 상담역과 짚어보세요. 소득·시세가 조금 넘은 경우라면 은행대출 탭의 일반 주담대가 먼저 열릴 가능성이 있어요.
-      </div>
       <div style={{ fontSize: 12, color: "#9AA3A0", marginTop: 8 }}>
-        판정 기준: 합산소득 {won(ctx.totalIncome)}원 · 시세 {won(ctx.unit.price)}원 · 전용 {ctx.unit.areaM2}㎡ · 무주택
+        합산소득 {won(ctx.totalIncome)}원 · 시세 {won(ctx.unit.price)}원 · 전용 {ctx.unit.areaM2}㎡
       </div>
     </Section>
   );
@@ -502,7 +407,7 @@ function NoneCard({ others, ctx }) {
 /* 안 되는 것도 왜 안 되는지 보여준다 — 숨기면 "왜 나는 안 되지"가 남는다. */
 function OthersNote({ others }) {
   return (
-    <Section title="같이 본 것들" subtitle="아래는 지금 조건에선 안 열렸어요. 이유만 짧게 남겨둘게요.">
+    <Section title="안 열린 대출">
       {others.map((o) => (
         <div key={o.key} style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.7, marginBottom: 4 }}>
           <b style={{ color: C.ink }}>{o.title}</b> —{" "}
@@ -513,9 +418,4 @@ function OthersNote({ others }) {
       ))}
     </Section>
   );
-}
-
-/* 답에 따라 건너뛴 질문은 조용히 지우지 않고 "왜 안 물었는지"를 남긴다. */
-function SkippedNote({ children }) {
-  return <div style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.6, marginBottom: 14, padding: "9px 12px", borderRadius: 10, background: "#F7FAF7", border: `1px dashed ${C.line}` }}>{children}</div>;
 }

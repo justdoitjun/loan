@@ -20,7 +20,7 @@ import { limitParts } from "../engine.js";
       그 사실은 PRODUCTS.didimdol.capacityModel = "fundDTI"가 정한다. 여기에 다시 등록하지 말 것.
    ✏️ 가상값 — 실제 심사 관행으로 교체할 것.
    등록되지 않은 상품은 보수적으로 원리금(DSR)으로 본다 — 한도를 부풀리지 않는 쪽이 기본값. */
-export const DEBT_VIEW = { bogeumjari: "interestOnly" };
+export const DEBT_VIEW = { bogeumjari: "interestOnly", bank: "principalAndInterest" };   // 은행: products/bank/bank.md 3절
 const viewOf = (key) => DEBT_VIEW[key] ?? "principalAndInterest";
 
 /* 지금 레버 위치에서 닿는 한도.

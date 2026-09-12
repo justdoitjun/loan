@@ -9,8 +9,8 @@ import { BackButton, card } from "./ui.jsx";
 import Gov from "./eligibility/gov.jsx";
 import Bank from "./eligibility/bank.jsx";
 
-export default function Eligibility({ unit, cash, ownIncome, kind, setKind, elig, setElig, onBack, onPick }) {
-  const ctx = buildCtx({ unit, cash, ownIncome, elig });
+export default function Eligibility({ unit, ownIncome, kind, setKind, elig, setElig, onBack, onPick }) {
+  const ctx = buildCtx({ unit, ownIncome, elig });
 
   return (
     <div className="slideup">
@@ -24,11 +24,11 @@ export default function Eligibility({ unit, cash, ownIncome, kind, setKind, elig
 
       <div style={{ ...card, padding: "12px 16px", marginBottom: 16 }}>
         <div style={{ fontSize: 15, fontWeight: 800 }}>{unit.name}</div>
-        <div style={{ fontSize: 12, color: C.inkSoft }}>{won(unit.price)}원 · 전용 {unit.areaM2}㎡ · 필요 대출 약 {won(ctx.needed)}원</div>
+        <div style={{ fontSize: 12, color: C.inkSoft }}>{won(unit.price)}원 · 전용 {unit.areaM2}㎡</div>
       </div>
 
       {kind === "bank"
-        ? <Bank />
+        ? <Bank ctx={ctx} elig={elig} setElig={setElig} onPick={onPick} />
         : <Gov ctx={ctx} elig={elig} setElig={setElig} onPick={onPick} />}
     </div>
   );

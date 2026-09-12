@@ -7,14 +7,14 @@
    왜 나눴나 — 자격 조건(가족·무주택·생애최초·결혼·소득)과 레버(부채 가정·소득 가정)는
    매물이 바뀌어도 그대로다. 매물마다 다른 건 가격·면적뿐이다. 그래서 사람은 앱 최상위에
    한 벌만 두고, 매물별 판정은 (매물 + 이 사람) → 결과인 순수 함수로 전부 돌린다.
-   그래야 지도 전체를 동시에 다시 칠할 수 있고, 다른 매물을 골라도 재질문이 없다.
+   그래야 매물 전체를 동시에 다시 계산할 수 있고, 다른 매물을 골라도 재질문이 없다.
 
    소유: App.jsx가 useState로 EMPTY_PERSON 하나를 들고 있다. 각 화면은 자기 조각만 받아 쓴다.
      Eligibility  → elig       (자격 답변)
      DetailInfo   → detail     (부채 잔액 · 소득의 질)
      Strategy     → pull       (레버를 당긴 값) ⚠️ 로컬 state 아님 — 화면을 나가도 유지된다
      IncomeCheck  → incomeCheck(소득 신뢰도 자가진단)
-     예산 화면     → ownIncome, cash */
+     소득 화면     → ownIncome */
 import { LEVER } from "./data.js";
 import { ageOf, spouseIncomeOf } from "./engine.js";
 
@@ -32,7 +32,8 @@ export const EMPTY_ELIG = {
   birthdays: [],          // 자녀 생년월일 — 0명부터 동적 추가/삭제
 
   /* ── 단일 질문 ── */
-  homeCount: null,        // 0 = 무주택(진입 게이트). 화면은 네/아니오지만 엔진이 읽는 형식은 그대로 둔다
+  homeCount: null,        // 0 = 무주택(진입 게이트) · 1 · 2(이상). 정부탭은 네/아니오(0/1), 은행탭은 4버킷(0/1/2)으로 채운다
+  disposeExisting: null,  // homeCount=1일 때만: 처분조건부면 true(LTV 70%), 유지면 false(수도권 LTV 0%). 은행탭만 묻는다
   firstTime: null,        // 생애최초 — "한 번도 소유한 적 없다". 무주택("지금 없다")과 다른 개념
   marital: null,          // "married" | "planned" | "single"  ← 4버킷이 이 둘로 매핑된다
   marriedWithin7: null,   // marital="married"일 때만: 혼인신고 7년 이내면 true → 신혼가구
@@ -60,7 +61,7 @@ export const bucketOf = (elig) => {
 };
 
 /* ── 질문 진행 상태 ──
-   지도가 "정밀 재채색 모드로 갈 수 있나"를 판단하려면 자격 답변이 다 찼는지를 알아야 하는데,
+   지도가 "정밀 한도 모드로 갈 수 있나"를 판단하려면 자격 답변이 다 찼는지를 알아야 하는데,
    그 판단이 컴포넌트 안에만 있으면 App이 같은 조건을 또 쓰게 된다(= 두 벌이 되고 반드시 어긋난다).
    elig 하나만 보고 결정된다 — 매물·소득과 무관하다. */
 export function eligSteps(elig) {
@@ -101,6 +102,39 @@ export function eligSteps(elig) {
 /* 자격 답변이 다 찼는가 = 이 사람에 대해 상품 판정을 돌릴 수 있는가. */
 export const eligReady = (elig) => eligSteps(elig).ready;
 
+/* ── 은행탭 진행 상태 (products/bank/bank.md 1절) ──
+   질문은 둘뿐: ① 주택 보유 상태 → ② 배우자 소득(DSR 합산). 정부탭과 같은 elig 필드를 쓴다 —
+   한쪽에서 답한 무주택·배우자·소득 밴드는 다른 쪽에서 다시 묻지 않는다. */
+export const homeBucketOf = (elig) => {
+  if (elig.homeCount === 0) return "none";
+  if (elig.homeCount === 1) return elig.disposeExisting === true ? "dispose" : elig.disposeExisting === false ? "keep" : null;
+  if (elig.homeCount >= 2) return "multi";
+  return null;
+};
+export function bankSteps(elig) {
+  const bucket = homeBucketOf(elig);
+  const homeReady = bucket !== null;
+  const open = bucket === "none" || bucket === "dispose";          // 그 외는 LTV 0% → 닫힘
+  const askIncome = homeReady && open;
+  /* 배우자 있음 → 밴드까지 있어야 소득이 정해진다. 없음 → 본인 소득만. */
+  const spouseReady = elig.hasSpouse === false || (elig.hasSpouse === true && elig.spouseBand !== null);
+  return { bucket, homeReady, open, askIncome, spouseReady, ready: askIncome && spouseReady };
+}
+export const bankReady = (elig) => bankSteps(elig).ready;
+
+/* 배우자 유무 토글 — 뒤 질문들과 모순이 남지 않게 어긋난 답만 조용히 비운다.
+   두 탭이 같은 토글을 쓰므로 판단은 여기 한 곳(화면마다 다르게 정리하면 탭을 오갈 때 답이 꼬인다). */
+export function withSpouse(s, v) {
+  const next = { ...s, hasSpouse: v };
+  if (v === false) {
+    next.spouseBirthday = "";
+    /* 결혼예정은 '배우자 없음'과 모순이 아니다(예비배우자) → 그 소득은 계속 합산 대상이라 안 지운다 */
+    if (s.marital !== "planned") { next.spouseBand = null; next.spouseIncomeRaw = ""; }
+    if (s.marital === "married") { next.marital = null; next.marriedWithin7 = null; }
+  } else if (s.marital === "single") { next.marital = null; next.marriedWithin7 = null; }
+  return next;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    2) 부채 · 소득의 질 (DetailInfo가 채운다) — 레버의 시작 위치
    ══════════════════════════════════════════════════════════════════════════ */
@@ -127,11 +161,10 @@ export const EMPTY_INCOME_CHECK = { groupKey: null, typeKey: null, answers: {} }
    4) 사람 상태 전체
    ══════════════════════════════════════════════════════════════════════════ */
 export const EMPTY_PERSON = {
-  /* 예산 화면에서 받는 값 (만원) */
+  /* 소득 화면에서 받는 값 (만원). 보유 현금은 묻지 않는다 — 필요 현금은 시세−대출의 결과다. */
   ownIncome: 0,
-  cash: 0,
   /* ⚠️ 배우자 소득은 elig.spouseBand에 있다. 본인 소득(ownIncome)과 출처가 다르다 —
-        본인은 예산 화면 슬라이더, 배우자는 자격 화면 밴드. 합치는 건 engine.buildCtx의 일이다. */
+        본인은 소득 화면 슬라이더, 배우자는 자격 화면 밴드. 합치는 건 engine.buildCtx의 일이다. */
   elig: EMPTY_ELIG,
   detail: EMPTY_DETAIL,
   /* 레버를 당긴 값 { debt, income } · null = 아직 한 번도 안 당김(유도 애니메이션 신호).
@@ -141,11 +174,12 @@ export const EMPTY_PERSON = {
   incomeCheck: EMPTY_INCOME_CHECK,
 };
 
-/* 이 사람에 대해 상품 자격 판정을 돌릴 수 있는가 = 지도를 정밀 재채색해도 되는가.
+/* 이 사람에 대해 상품 자격 판정을 돌릴 수 있는가 = 매물별 한도를 정밀 계산해도 되는가.
+   정부 또는 은행, 어느 한쪽 답변이 차면 켠다 — 숫자는 채널을 가리지 않고 "가장 크게 열리는 길"로 본다.
    부채·레버는 조건이 아니다 — 안 받았으면 무부채로 가정하고 계산한다(기존 '천장' 잣대와 같다). */
-export const personReady = (person) => eligReady(person.elig);
+export const personReady = (person) => eligReady(person.elig) || bankReady(person.elig);
 
-/* 부부합산 소득 (만원). 본인(예산 화면) + 배우자(자격 화면 밴드). */
+/* 부부합산 소득 (만원). 본인(소득 화면) + 배우자(자격 화면 밴드). */
 export const totalIncomeOf = (person) => person.ownIncome + spouseIncomeOf(person.elig);
 
 /* ── 사람 상태 → 레버 값 ──
@@ -154,14 +188,15 @@ export const totalIncomeOf = (person) => person.ownIncome + spouseIncomeOf(perso
 
    incomeCap = 이 상품의 소득상한(만원). 넘기면 소득 레버가 거기서 잘린다 —
    소득을 더 올리면 한도가 느는 게 아니라 '자격'이 닫히기 때문이다(거짓 희망 방지).
-   지도처럼 상품이 하나로 정해지지 않은 자리에선 안 넘긴다(LEVER.incomeHeadroom까지만).
+   지도처럼 상품이 하나로 정해지지 않은 자리에선 3억(LEVER.incomeMax)까지.
 
    pulled=false로 부르면 '당기기 전' 시작 위치가 나온다 — 행동 번역의 기준선. */
 export function leverOf(person, price, incomeCap = null, pulled = true) {
   const income = totalIncomeOf(person);
-  /* 이미 소득상한을 넘었으면 상한이 현재 소득보다 낮게 나온다 → 레버 범위가 뒤집히지 않게 바닥을 깐다.
-     (그 경우 incomeRoom이 0이 되고, 화면은 "소득 레버는 올릴 데가 없어요"로 넘어간다) */
-  const incomeMax = Math.max(Math.min(incomeCap ?? Infinity, income + LEVER.incomeHeadroom), income);
+  /* 소득 레버 최댓값 = 3억. 상품 소득상한이 더 낮으면 거기서 자른다.
+     이미 상한을 넘었으면 범위가 뒤집히지 않게 현재 소득을 바닥으로 깐다. */
+  const ceiling = Math.min(incomeCap ?? LEVER.incomeMax, LEVER.incomeMax);
+  const incomeMax = Math.max(ceiling, income);
   /* 확정 전엔 부채를 0으로 본다 — 슬라이더를 만지작거리는 중간값으로 지도가 흔들리면 안 된다. */
   const debtBase = person.detail.debtConfirmed ? person.detail.debt : 0;
   const pull = pulled ? person.pull : null;

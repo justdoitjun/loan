@@ -24,8 +24,7 @@ export default function DetailInfo({ value, onChange }) {
   const editDebt = () => onChange({ ...value, debtConfirmed: false });
 
   return (
-    <Section title="① 지금 상태를 대충이라도 알려주세요"
-      subtitle="정확하지 않아도 돼요. 얼마나 늘리고 줄여야하는지를 볼거에요.">
+    <Section title="① 기존 대출">
 
       {/* 부채는 이 한 칸이 전부다. 상환액·만기를 쪼개 묻지 않는다 — 잣대가 잔액에서 알아서 환산한다. */}
       {confirmed ? (

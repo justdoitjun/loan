@@ -17,15 +17,29 @@ export const DATA = [
 ];
 
 /* ✏️ 여기 2 — RULE : 예산 계산 (노원=비규제 가정) */
-export const RULE = { LTV: 0.70, roomDeduction: 5500, DSR: 0.40, loanRate: 0.04, loanYears: 30, creditRate: 0.055, creditYears: 5, seoulCap: null };
-export const AMBER_BAND = 0.10;
+export const RULE = { LTV: 0.70, roomDeduction: 5500, DSR: 0.40, loanRate: 0.04, loanYears: 30, creditRate: 0.055, creditYears: 5 };
 
+/* ✏️ 여기 2-a — 지역 (출처 .claude/rules/_policy.md · 표는 products/_common.md)
+   regulated = 규제지역 / metroOther = 규제지역 외 수도권 / local = 지방. 노원 스냅샷 = 규제지역 외 수도권 가정.
+   ⚠️ 바꾸면 PRODUCTS.bank.LTV도 같이 본다(LTV 표의 행이 지역마다 다르다 — bank.md 1절). */
+export const REGION = "metroOther";
+export const REGION_LABEL = { regulated: "규제지역", metroOther: "규제지역 외 수도권", local: "지방" };
+
+/* 지역별 주담대 한도 (만원). 담보가격 구간(upTo 이하)에 따라 갈린다 — 위에서부터 첫 매치.
+   null = 제한 없음(그 항이 Min에서 빠진다). 정부상품은 이 표를 안 탄다(PRODUCTS[key].regionCapped 없음).
+   이주비·중도금 행은 미구현. 읽는 곳은 engine.regionCapOf 하나. */
+export const REGION_CAP = [
+  { upTo: 150000, cap: { regulated: 60000, metroOther: 60000, local: null } },
+  { upTo: 250000, cap: { regulated: 40000, metroOther: 40000, local: null } },
+  { upTo: Infinity, cap: { regulated: 20000, metroOther: 20000, local: null } },
+];
 /* ✏️ 여기 2-b — 조종간(Strategy) 레버의 움직임 범위. 전부 가상값 — 실제 관행으로 교체.
    가정 금리·만기는 여기 두지 않는다(RULE.creditRate / RULE.creditYears가 유일한 출처). */
 export const LEVER = {
   /* 부채는 '잔액' 하나만 받는다. 두 잣대 모두 잔액에서 출발하기 때문 —
-     디딤돌 DTI는 잔액 × 추정금리(이자만), 은행 DSR은 잔액을 원리금으로 환산. 월상환액은 안 묻는다. */
-  incomeHeadroom: 4000,                               // 소득 레버가 위로 열리는 폭(만원). 상품 소득상한에서 잘린다
+     디딤돌 DTI는 잔액 × 추정금리(이자만), 은행 DSR은 잔액을 원리금으로 환산. 월상환액은 안 묻는다.
+     부채 레버 최댓값 = 지금 확정한 잔액. 소득 레버 최댓값 = 3억(상품 소득상한이 더 낮으면 거기서 자른다). */
+  incomeMax: 30000,
   incomeStep: 100,
 };
 
@@ -44,6 +58,17 @@ export const PRODUCTS = {
   bogeumjari: {
     key: "bogeumjari", name: "보금자리론", rateLabel: "연 3~4%대",
     calcRate: 0.038, ratio: 0.60, LTV: 0.70, offsetsRoomDeduction: true, cap: 36000, leadTime: "약 1.5~2개월",
+  },
+  /* 은행 일반 주담대 — 출처 .claude/rules/products/bank/bank.md. 숫자는 전부 ⚠️ 가정치.
+       ratio/calcRate/years = DSR 잣대(engine.repaymentCapacity): 차주단위 40% · 산정만기 30년 · 본건 환산금리 = 가정금리 + 스트레스 가산.
+       stressRate = 스트레스 DSR 가산(수도권 3단계 1.5%p). calcRate에 더해 계산만 한다 — 화면 금리(rateLabel)와 별개.
+       cap: null = 상품 자체 한도가 없다 → 그 자리는 지역별 cap이 대신 건다(regionCapped: true → REGION_CAP).
+       offsetsRoomDeduction: true = MCI 가입으로 방공제 상쇄.
+       capacityModel 없음 = 은행 DSR(보수적 기본값). DEBT_VIEW.bank(products/limit.js)가 부채를 원리금으로 본다. */
+  bank: {
+    key: "bank", name: "일반 주택담보대출", rateLabel: "연 4%대",
+    calcRate: RULE.loanRate, stressRate: 0.015, ratio: RULE.DSR, years: RULE.loanYears,
+    LTV: 0.70, offsetsRoomDeduction: true, cap: null, regionCapped: true, leadTime: "약 2~4주",
   },
 };
 
@@ -112,7 +137,5 @@ export const NO_HOME_EXCEPTION = `이런 경우는 주택 수에 합산되지 �
 
 /* ── 화면 상수 ── */
 export const C = { bg: "#F4F6F3", panel: "#FFFFFF", ink: "#1E2A24", inkSoft: "#5B6660", line: "#E4E9E4", green: "#2E9E6B", greenDeep: "#14705A", amber: "#E0A23A", greyDot: "#CBD1CE" };
-export const COLOR_VALUE = { green: C.green, amber: C.amber, grey: C.greyDot };
-export const COLOR_TEXT = { green: "예산 안에 들어와요", amber: "경계선이에요", grey: "지금은 예산을 넘어요" };
 export const DONG_LABELS = [{ name: "상계동", x: 28, y: 15 }, { name: "중계동", x: 66, y: 40 }, { name: "하계동", x: 60, y: 66 }];
 export const TABS = [{ key: "gov", label: "정부" }, { key: "bank", label: "은행" }];
