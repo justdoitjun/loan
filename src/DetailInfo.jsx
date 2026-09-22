@@ -24,8 +24,7 @@ export default function DetailInfo({ value, onChange }) {
   const editDebt = () => onChange({ ...value, debtConfirmed: false });
 
   return (
-    <Section title="① 기존 대출">
-
+    <Section title="① 기존보유대출">
       {/* 부채는 이 한 칸이 전부다. 상환액·만기를 쪼개 묻지 않는다 — 잣대가 잔액에서 알아서 환산한다. */}
       {confirmed ? (
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 12, background: "#F7FAF7", border: `1px solid ${C.line}` }}>

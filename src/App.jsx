@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
-import { DATA, RULE, C } from "./data.js";
+import { useState, useMemo, useLayoutEffect, useRef, useId } from "react";
+import { DATA, CITY, GUS, DONGS, RULE, C } from "./data.js";
 import { evaluate, repaymentCapacity, buildCtx, won } from "./engine.js";
-import { AppShell, Slider, eyebrow, h1, ghostBtn, listItem, modalOpt, fine } from "./ui.jsx";
+import { AppShell, Slider, eyebrow, h1, ghostBtn, listItem, modalOpt, fine, BottomSheet, useOverlayLock } from "./ui.jsx";
 import { EMPTY_PERSON, personReady } from "./person.js";
 import { judgeUnits } from "./verdict.js";
 import Eligibility from "./Eligibility.jsx";
@@ -20,6 +20,8 @@ export default function App() {
   const [unit, setUnit] = useState(null);              // 고른 매물
   const [kind, setKind] = useState("gov");             // 정부 | 은행
   const [pickedKey, setPickedKey] = useState(null);    // 가능 목록에서 고른 상품(규칙 key)
+  const [place, setPlace] = useState({ city: CITY, gu: "노원구", dong: "중계본동" });
+  const [sheet, setSheet] = useState(null);            // "gu" | "dong" | null
 
   const incomeTrustResult = incomeCheckResult(person.incomeCheck); // null | { tone, type, notes }
 
@@ -29,12 +31,16 @@ export default function App() {
      실제 자격·상품별 한도·레버까지 반영된 숫자다. 레버를 당기면 이 배열이 통째로 다시 나온다. */
   const dsrCap = useMemo(() => repaymentCapacity(income, RULE.DSR, RULE.loanRate, RULE.loanYears, 0), [income]);
   const precise = personReady(person);
+  const scoped = useMemo(
+    () => DATA.filter((d) => d.city === place.city && d.gu === place.gu && (d.dong === place.dong || d.dong === legalDongOf(place.dong))),
+    [place],
+  );
   const results = useMemo(
-    () => (precise ? judgeUnits(DATA, person) : DATA.map((d) => evaluate(d, dsrCap))),
-    [precise, person, dsrCap],
+    () => (precise ? judgeUnits(scoped, person) : scoped.map((d) => evaluate(d, dsrCap))),
+    [precise, person, dsrCap, scoped],
   );
   const listed = useMemo(
-    () => [...results].sort((a, b) => a.cashNeeded - b.cashNeeded || a.price - b.price),
+    () => [...results].sort((a, b) => b.cashNeeded - a.cashNeeded || b.price - a.price),
     [results],
   );
 
@@ -60,17 +66,23 @@ export default function App() {
      pickedKey는 비운다: 새 매물에선 통과 목록이 달라져 이전 선택이 없을 수 있고,
      Strategy가 passed[0]으로 알아서 대체한다. */
   function swapUnit(id) {
-    const next = DATA.find((d) => d.id === id);
+    const next = scoped.find((d) => d.id === id);
     if (!next) return;
     setUnit(next); setPickedKey(null);
   }
 
+  const overlay = sheet || modalUnit;
+
   return (
     <AppShell>
+      <div inert={overlay ? "" : undefined}>
       {step === "budget" && (
         <>
-          <div style={eyebrow}>노원구 · 그린라이트</div>
-          <h1 style={h1}>내 소득으로,<br />필요한 현금을 알아봐요.</h1>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+            <div style={eyebrow}>그린라이트</div>
+            <PlacePath place={place} sheet={sheet} onGu={() => setSheet("gu")} onDong={() => setSheet("dong")} />
+          </div>
+          <h1 style={h1}>내 소득으로<br />가능한 대출은 얼마일까요?</h1>
           <div style={{ marginTop: 16 }}>
             <Slider label="나의 연소득" value={income} min={0} max={12000} step={100} onChange={(v) => patch("ownIncome", v)} display={won(income) + "원"} />
           </div>
@@ -86,17 +98,17 @@ export default function App() {
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "16px 0 10px" }}>
             <span style={{ fontSize: 14, fontWeight: 800, color: C.ink }}>총 {listed.length}건</span>
-            <span style={{ fontSize: 12, color: C.inkSoft }}>필요 현금 적은 순</span>
+            <span style={{ fontSize: 12, color: C.inkSoft }}>필요 현금 많은 순</span>
           </div>
           {listed.map((r) => (
             <button key={r.id} onClick={() => setModalUnit(r)} style={listItem}>
               <div>
                 <div style={{ fontSize: 15, color: C.ink, fontWeight: 700 }}>{r.name}</div>
                 <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 2 }}>{r.dong} · 전용 {r.areaM2}㎡ · {won(r.price)}원</div>
-                <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 3 }}>대출 약 {won(r.loan)}원</div>
+                <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 3 }}>현금 {won(r.cashNeeded)}원</div>
               </div>
-              <span style={{ fontSize: 13, color: C.greenDeep, fontWeight: 700, textAlign: "right", flex: "0 0 auto" }}>
-                현금 {won(r.cashNeeded)} ›
+              <span style={{ fontSize: 15, color: C.greenDeep, fontWeight: 800, textAlign: "right", flex: "0 0 auto" }}>
+                대출 {won(r.loan)} ›
               </span>
             </button>
           ))}
@@ -122,28 +134,169 @@ export default function App() {
           detail={person.detail} setDetail={setDetail}
           pull={person.pull} setPull={setPull}
           onSwapUnit={swapUnit}
+          units={scoped}
           onBack={() => setStep("eligibility")} />
       )}
+      </div>
 
       {modalUnit && <ProductModal r={modalUnit} onPick={pickKind} onClose={() => setModalUnit(null)} />}
+      {sheet && (
+        <PlaceSheet
+          start={sheet}
+          place={place}
+          onCommit={setPlace}
+          onClose={() => setSheet(null)} />
+      )}
     </AppShell>
   );
 }
 
+/* 행정동 → 매물 데이터의 법정동. 중계1동·중계본동 → 중계동. 매물 없는 동은 그대로여서 목록이 빈다. */
+function legalDongOf(dong) {
+  if (!dong) return dong;
+  return dong.replace(/본동$/, "동").replace(/제?\d+(·\d+)*동$/, "동");
+}
+
+function unitCount(gu, dong) {
+  return DATA.filter((d) => d.gu === gu && (!dong || d.dong === dong || d.dong === legalDongOf(dong))).length;
+}
+
+function PlacePath({ place, onGu, onDong, sheet }) {
+  const dongs = DONGS[place.gu] ?? [];
+  return (
+    <div className="path">
+      <span className="path-city">{place.city}</span>
+      <span className="path-sep">&gt;</span>
+      <button type="button" className="path-btn" aria-haspopup="dialog" aria-expanded={sheet === "gu"} onClick={onGu}>
+        {place.gu}<span className="path-caret" aria-hidden="true" />
+      </button>
+      {place.dong && dongs.length > 0 && (
+        <>
+          <span className="path-sep">&gt;</span>
+          <button type="button" className="path-btn" aria-haspopup="dialog" aria-expanded={sheet === "dong"} onClick={onDong}>
+            {place.dong}<span className="path-caret" aria-hidden="true" />
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* 구를 고르는 일과 동을 고르는 일은 한 장이다.
+   구만 확정하면 첫 동이 임의로 들어가 목록이 비므로, 동을 고를 때까지 지역을 바꾸지 않는다. */
+function PlaceSheet({ start, place, onCommit, onClose }) {
+  const [level, setLevel] = useState(start);
+  const [gu, setGu] = useState(place.gu);
+  const [q, setQ] = useState("");
+  const bodyRef = useRef(null);
+  const closeRef = useRef(null);
+  const dongs = DONGS[gu] ?? [];
+  const query = q.trim();
+  const shown = query ? dongs.filter((d) => d.includes(query)) : dongs;
+
+  useLayoutEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+    if (query) return;
+    const cur = el.querySelector("[aria-current='true']");
+    if (!cur) return;
+    const c = el.getBoundingClientRect();
+    const r = cur.getBoundingClientRect();
+    el.scrollTop += (r.top + r.height / 2) - (c.top + c.height / 2);
+  }, [level, gu, query]);
+
+  function pickGu(opt) {
+    setGu(opt);
+    setQ("");
+    setLevel("dong");
+  }
+  function pickDong(dong) {
+    onCommit({ city: CITY, gu, dong });
+    closeRef.current?.();
+  }
+
+  const finding = level === "dong";
+  return (
+    <BottomSheet
+      title={finding ? "동을 골라요" : "구를 골라요"}
+      subtitle={finding ? gu : "고르면 동을 이어서 골라요"}
+      back={finding ? (
+        <button type="button" className="sheet-back" aria-label="구 다시 고르기" onClick={() => { setQ(""); setLevel("gu"); }}>← 구</button>
+      ) : null}
+      pinned={finding ? (
+        <div className="place-findwrap">
+          <input
+            className="place-find"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="동 이름"
+            aria-label="동 이름"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            enterKeyHint="search" />
+          {q ? (
+            <button type="button" className="place-find-clear" aria-label="검색 지우기" onClick={() => setQ("")}>×</button>
+          ) : null}
+        </div>
+      ) : null}
+      onClose={onClose}
+      closeRef={closeRef}
+      bodyRef={bodyRef}
+    >
+      <div key={`${level}:${gu}`} className="sheet-pane">
+        {level === "gu" ? (
+          <div className="place-gus">
+            {GUS.map((opt) => {
+              const count = unitCount(opt);
+              return (
+                <button key={opt} type="button" className="place-gu" aria-current={opt === gu ? "true" : undefined} onClick={() => pickGu(opt)}>
+                  <span>{opt}</span>
+                  {count > 0 ? <span className="place-count">{count}건</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        ) : shown.length === 0 ? (
+          <p className="place-empty">그 이름의 동이 없어요</p>
+        ) : (
+          shown.map((opt) => {
+            const on = gu === place.gu && opt === place.dong;
+            const count = unitCount(gu, opt);
+            return (
+              <button key={opt} type="button" className="place-dong" aria-current={on ? "true" : undefined} onClick={() => pickDong(opt)}>
+                <span>{opt}</span>
+                <span className="place-side">
+                  {count > 0 ? <span className="place-count">{count}건</span> : null}
+                  {on ? <span className="place-check" aria-hidden="true">✓</span> : null}
+                </span>
+              </button>
+            );
+          })
+        )}
+      </div>
+    </BottomSheet>
+  );
+}
+
 function ProductModal({ r, onPick, onClose }) {
+  const panelRef = useRef(null);
+  const titleId = useId();
+  useOverlayLock(onClose, panelRef);
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(20,30,26,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 18 }}>
-      <div onClick={(e) => e.stopPropagation()} className="modal" style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 20, padding: "20px 20px 22px" }}>
-        <div style={{ fontSize: 18, fontWeight: 800 }}>{r.name}</div>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={(e) => e.stopPropagation()} className="modal" style={{ width: "100%", maxWidth: 420, maxHeight: "min(90dvh, 720px)", overflowY: "auto", background: "#fff", color: C.ink, colorScheme: "light", borderRadius: 20, padding: "20px 20px 22px", outline: "none" }}>
+        <div id={titleId} style={{ fontSize: 18, fontWeight: 800 }}>{r.name}</div>
         <div style={{ fontSize: 13, color: C.inkSoft }}>{r.dong} · 전용 {r.areaM2}㎡ · {won(r.price)}원</div>
         <div style={{ margin: "12px 0 4px", padding: "10px 12px", borderRadius: 12, background: "#F7FAF7", border: `1px solid ${C.line}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "2px 0" }}>
             <span style={{ color: C.inkSoft }}>가능한 대출</span>
-            <span style={{ fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>약 {won(r.loan)}원</span>
+            <span style={{ fontWeight: 800, color: C.greenDeep, fontVariantNumeric: "tabular-nums" }}>약 {won(r.loan)}원</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "2px 0" }}>
             <span style={{ color: C.inkSoft }}>필요 현금</span>
-            <span style={{ fontWeight: 800, color: C.greenDeep, fontVariantNumeric: "tabular-nums" }}>약 {won(r.cashNeeded)}원</span>
+            <span style={{ fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>약 {won(r.cashNeeded)}원</span>
           </div>
         </div>
         <div style={{ fontSize: 13, color: C.ink, margin: "14px 0 12px", fontWeight: 600 }}>어떤 대출로 알아볼까요?</div>

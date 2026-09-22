@@ -1,15 +1,15 @@
 # 아키텍처 · 코드 구조
 
-- **정적 프론트엔드 한 장. 백엔드·DB·Redis·배치 전부 없음.**
+- **정적 프론트엔드 한 장. 백엔드·DB·Redis 없음.** 서버에서 도는 배치는 없다.
 - 데이터는 정적 JSON: 매물 시세(노원 한 동네 스냅샷) / 한도 룰셋 / 대처법 족보.
-- 모든 계산과 로직은 브라우저에서 이뤄진다. 시세 갱신 = JSON 갈아끼우고 재배포(라이브 파이프라인 X).
+- 모든 계산과 로직은 브라우저에서 이뤄진다. 시세 갱신 = `scripts/fetch-units.mjs`가 `src/data/units.json`을 갈아끼우고 재배포(라이브 파이프라인 X). 앱은 그 스크립트를 import하지 않는다.
 - 스택: React + Vite. `npm run dev`로 로컬 구동, Vercel/Netlify로 정적 배포.
 
 ## 파일 구조
 
 | 파일 | 역할 |
 |---|---|
-| `src/App.jsx` | 소득+매물 목록 → 매물선택 + 정부/은행 팝업. **단계 오케스트레이션 + 사람상태 소유** |
+| `src/App.jsx` | 지역(시·구·동)+소득+매물 목록 → 매물선택 + 정부/은행 팝업. **단계 오케스트레이션 + 사람상태 소유** |
 | `src/person.js` | **사람상태 스키마 + 순수 판단**(EMPTY_PERSON·eligSteps·detailReady·leverOf). JSX 금지 |
 | `src/verdict.js` | **`judgeUnit(매물, 사람)` — 매물별 한도·필요 현금 순수 함수.** 목록 숫자 갱신의 단일 진입점 |
 | `src/Eligibility.jsx` | **자격 화면 껍데기**(탭·매물카드). 자격을 묻는 유일한 입구. 본문은 탭별로 아래 두 파일 |
@@ -21,7 +21,9 @@
 | `src/IncomeCheck.jsx` | **소득 신뢰도 자가진단.** 소득유형 선택 → 체크리스트 → 초록/노랑 논조 |
 | `src/engine.js` | 계산·판정 전부(중복 정의 금지). JSX 금지 |
 | `src/data.js` | 매물·예산규칙·상품 **금융 파라미터**·`LEVER`(레버 범위)·화면 상수. 로직 금지 |
+| `src/data/units.json` | 노원 실거래 스냅샷(정적). 수집 스크립트가 갈아끼운다. 앱은 스크립트를 import하지 않는다 |
 | `src/data/incomeRules.js` | 디딤돌 **소득 인정 규정 원문 보존본**(엑셀 구조화, 원문 대조 완료). 요약으로 덮어쓰지 말 것. 화면은 `ACTIVE_INCOME_TYPES`(소득추정 제외) |
+| `scripts/fetch-units.mjs` | 오프라인 시세 수집. `DATA_GO_KR_KEY` + `--from/--to`. 결과는 `units.json`. 앱은 import하지 않음 |
 | `src/products/didimdol.js` | 디딤돌 5종 **자격 상한 규칙 데이터** |
 | `src/products/bogeumjari.js` | 보금자리 규칙 데이터(같은 DSL) |
 | `src/products/bank.js` | 은행 일반 주담대 규칙 데이터(진입 조건만, 상한은 전부 `null`) |
@@ -53,8 +55,8 @@
 - **사람상태**(App의 `person` 하나) — `{ ownIncome, elig, detail, pull, incomeCheck }`.
   화면을 오가도 유지된다. **매물을 바꿔도 초기화하지 않는다** — 그게 재질문을 없앤 지점이다.
   보유 현금은 여기 없다. 필요 현금은 시세와 대출에서 그때그때 계산한다(`engine.cashNeededOf`).
-- **화면상태**(App의 개별 useState) — `{ step, unit, kind, pickedKey, modalUnit }`.
-  "지금 어디를 보고 있나"만. 매물을 바꾸면 `pickedKey`만 리셋한다(통과 목록이 달라지므로).
+- **화면상태**(App의 개별 useState) — `{ step, unit, kind, pickedKey, modalUnit, place }`.
+  "지금 어디를 보고 있나"만. `place`는 시·구·동. 매물을 바꾸면 `pickedKey`만 리셋한다(통과 목록이 달라지므로).
 - ⚠️ **가정값(`pull`)을 Strategy 로컬 state로 되돌리지 말 것.** 목록이 같은 값을 읽어서
   기존 대출·소득 가정을 바꾸면 모든 매물의 대출·필요 현금이 다시 계산된다. 로컬로 내리면 그 연결이 끊긴다.
 - ⚠️ `person.js`·`verdict.js`에 **JSX/React를 import하지 말 것.** 화면 없이 돌아가야

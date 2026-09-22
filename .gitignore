@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# 공공데이터포털 인증키
+.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

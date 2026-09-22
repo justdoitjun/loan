@@ -13,7 +13,7 @@
    ⚠️ 자격은 여기서 절대 다시 묻지 않는다. 자격은 Eligibility 화면에서만 받는다
       (정부 → eligibility/gov.jsx, 은행 → eligibility/bank.jsx). */
 import { useMemo, useState } from "react";
-import { DATA, PRODUCTS, LEVER, C } from "./data.js";
+import { PRODUCTS, LEVER, C } from "./data.js";
 import { deriveFacts, judgeAll, withAssumedIncome, won, eok, cashNeededOf } from "./engine.js";
 import { limitAt, ceilingAt } from "./products/limit.js";
 import { leverOf, detailReady } from "./person.js";
@@ -26,7 +26,7 @@ const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 /* ⚠️ 레버(pull)는 이 화면의 로컬 state가 아니다 — person.pull에 있고 props로 내려온다.
    이 화면을 나갔다 와도 당긴 위치가 유지되고, 더 중요하게는 지도가 같은 값을 읽어서
    레버를 움직이는 순간 모든 매물이 다시 칠해진다. 여기 useState로 되돌리지 말 것. */
-export default function Strategy({ ctx, person, pickedKey, onPickOther, detail, setDetail, pull, setPull, onSwapUnit, onBack }) {
+export default function Strategy({ ctx, person, pickedKey, onPickOther, detail, setDetail, pull, setPull, onSwapUnit, units, onBack }) {
   const { passed } = judgeAll(deriveFacts(ctx));
   const picked = passed.find((p) => p.key === pickedKey) ?? passed[0] ?? null;
 
@@ -36,7 +36,7 @@ export default function Strategy({ ctx, person, pickedKey, onPickOther, detail, 
       <div className="slideup">
         <BackButton onClick={onBack}>자격 조건으로</BackButton>
         <div style={{ ...card, color: C.inkSoft, fontSize: 14, lineHeight: 1.6 }}>조건이 바뀌어서 지금 열리는 대출이 없어요. 앞 화면에서 자격 답변을 다시 확인해주세요.</div>
-        <OtherUnits person={person} currentId={ctx.unit.id} onSwapUnit={onSwapUnit} />
+        <OtherUnits person={person} units={units} currentId={ctx.unit.id} onSwapUnit={onSwapUnit} />
       </div>
     );
   }
@@ -81,47 +81,40 @@ export default function Strategy({ ctx, person, pickedKey, onPickOther, detail, 
       )}
 
       {/* 다른 매물을 볼 때만 위 내용을 접는다. 기본은 닫힘 — 조종간이 주인공이고 이건 곁가지다. */}
-      <OtherUnits person={person} currentId={ctx.unit.id} onSwapUnit={onSwapUnit} />
+      <OtherUnits person={person} units={units} currentId={ctx.unit.id} onSwapUnit={onSwapUnit} />
 
       <p style={fine}>상담역이 확정해요. 대출을 약속하지 않아요.</p>
     </div>
   );
 }
 
-/* ── 레버가 결과를 못 움직일 때 그 자리에 오는 것 ──
-   레버를 숨기는 대신 반드시 세 가지를 준다: 무엇이 벽인지 / 왜 부채·소득으로 안 되는지 /
-   그럼 어디가 열려 있는지. 셋째가 빠지면 이건 그냥 거절 화면이 된다(가드레일 4). */
-function InertLevers({ binding, cash, better, betterCash, productName, incomeCapped, offsetsRoomDeduction, onPickOther }) {
-  /* 벽마다 '왜 안 움직이는지'가 다르다. 뭉뚱그리면 창구에서 물어볼 것도 못 정한다. */
-  const why = {
-    ltv: <>담보에서 걸려요. 대출을 줄여도 소득이 인정돼도 현금이 안 줄어요.</>,
-    cap: <>{productName} 최대한도예요.</>,
-    region: <>지역 한도예요. 대출을 줄여도 소득이 인정돼도 현금이 안 줄어요.</>,
-    dti: incomeCapped
-      ? <>소득 상한이에요. 더 올리면 자격이 닫혀요.</>
-      : <>소득 벽이에요.</>,
-  }[binding.key] ?? <>대출을 줄여도 소득이 인정돼도 안 움직여요.</>;
+/* 레버가 결과를 못 움직일 때.
+   벽(담보·cap·지역)은 ②가 이미 표시한다. 여기선 반복하지 않고,
+   채워졌으면 그 사실만, 아니면 열린 다음 길만 준다. */
+function InertLevers({ binding, cash, better, betterCash, incomeCapped, offsetsRoomDeduction, onPickOther }) {
+  if (cash <= 0) {
+    return <Section title="③ 대출로 채워져요" tone="ok" />;
+  }
+
+  const roomDeduction = binding.key === "ltv" && !offsetsRoomDeduction && !better;
+  const incomeCloses = binding.key === "dti" && incomeCapped;
+  const hasNext = better || roomDeduction || incomeCloses;
 
   return (
-    <Section title={cash <= 0 ? "③ 이미 채워져요" : "③ 안 움직여요"} tone="off">
-      <div style={{ fontSize: 13, lineHeight: 1.7, color: C.inkSoft }}>
-         <b style={{ color: C.ink }}>{binding.label} 약 {won(binding.value)}원</b>. {why}
-      </div>
-
-      {cash > 0 && (better || (binding.key === "ltv" && !offsetsRoomDeduction)) && (
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.line}` }}>
+    <Section title="③ 이 길에선 여기까지예요" tone="off">
+      {hasNext && (
+        <>
           {better && (
             <Path>
-              <b>{better.title}</b>면 현금 약 {won(betterCash)}원.{" "}
+              <b>{better.title}</b> · 현금 약 {won(betterCash)}원{" "}
               <button onClick={() => onPickOther(better.key)} style={{ border: "none", background: "none", padding: 0, color: C.greenDeep, fontSize: 13, fontWeight: 800, cursor: "pointer", textDecoration: "underline" }}>
                 이걸로 볼게요 →
               </button>
             </Path>
           )}
-          {binding.key === "ltv" && !offsetsRoomDeduction && (
-            <Path>방공제가 상쇄되는 대출이 있는지는 상담역에게.</Path>
-          )}
-        </div>
+          {roomDeduction && <Path>방공제를 안 깎는 대출이면 달라질 수 있어요.</Path>}
+          {incomeCloses && <Path>소득을 더 올리면 자격이 닫혀요.</Path>}
+        </>
       )}
     </Section>
   );
@@ -137,6 +130,7 @@ const Path = ({ children }) => (
    방법 화면 본체 — 가정값(pull)은 위에서 받고, 여기서는 가정 → 한도 → 결과만 그린다.
    ══════════════════════════════════════════════════════════════════════════ */
 function Cockpit({ ctx, picked, onPickOther, lever, base, price, incomeMax, incomeRoom, incomeCap, pulled, pullLever, onReset }) {
+  const [partsOpen, setPartsOpen] = useState(false);
   const P = PRODUCTS[picked.product];
 
   /* ── 레버 → 모듈 → 결과 ── */
@@ -195,20 +189,41 @@ function Cockpit({ ctx, picked, onPickOther, lever, base, price, incomeMax, inco
 
         <Gauge price={price} reach={reach.limit} ceiling={ceil.limit} />
 
-        <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.line}` }}>
-          {reach.parts.map((p) => {
-            const on = p.key === reach.binding.key;
-            return (
-              <div key={p.key} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 0", color: on ? C.ink : C.inkSoft, fontWeight: on ? 800 : 500 }}>
-                <span>{p.label}{on && <span style={{ color: C.amber, marginLeft: 6, fontSize: 11 }}>← 여기</span>}</span>
-                <span style={{ fontVariantNumeric: "tabular-nums" }}>{won(p.value)}</span>
+        <div style={{ marginTop: 14, borderTop: `1px solid ${C.line}` }}>
+          <button type="button" onClick={() => setPartsOpen((o) => !o)} aria-expanded={partsOpen}
+            style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "12px 0 0", border: "none", background: "none", cursor: "pointer", textAlign: "left" }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>
+              상세이유
+            </span>
+          
+            {/* <span style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>
+              {reach.binding.label}
+              <span style={{ color: C.amber, marginLeft: 6, fontSize: 11, fontWeight: 700 }}>← 여기</span>
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: C.inkSoft, fontVariantNumeric: "tabular-nums" }}>
+              {won(reach.binding.value)}
+              <span style={{ display: "inline-block", color: C.greenDeep, transform: partsOpen ? "rotate(180deg)" : "none", transition: "transform .25s ease" }}>▾</span>
+            </span> */}
+          </button>
+          <div className="acc" data-open={partsOpen}>
+            <div className="acc-inner">
+              <div style={{ paddingTop: 8 }}>
+                {reach.parts.map((p) => {
+                  const on = p.key === reach.binding.key;
+                  return (
+                    <div key={p.key} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 0", color: on ? C.ink : C.inkSoft, fontWeight: on ? 800 : 500 }}>
+                      <span>{p.label}{on && <span style={{ color: C.amber, marginLeft: 6, fontSize: 11 }}>← 여기</span>}</span>
+                      <span style={{ fontVariantNumeric: "tabular-nums" }}>{won(p.value)}</span>
+                    </div>
+                  );
+                })}
+                <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.line}` }}>
+                  <Stat label="금리" value={P.rateLabel} />
+                  <Stat label="준비기간" value={P.leadTime} warn />
+                </div>
               </div>
-            );
-          })}
-        </div>
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.line}` }}>
-          <Stat label="금리" value={P.rateLabel} />
-          <Stat label="준비기간" value={P.leadTime} warn />
+            </div>
+          </div>
         </div>
       </Section>
 
@@ -218,9 +233,9 @@ function Cockpit({ ctx, picked, onPickOther, lever, base, price, incomeMax, inco
           대신 무엇이 벽인지 말하고, 열려 있는 길로 넘긴다(가드레일 4). */}
       {leversInert ? (
         <InertLevers binding={ceil.binding} cash={cash} better={better} betterCash={betterCash}
-          productName={P.name} incomeCapped={incomeCap != null} offsetsRoomDeduction={P.offsetsRoomDeduction} onPickOther={onPickOther} />
+          incomeCapped={incomeCap != null} offsetsRoomDeduction={P.offsetsRoomDeduction} onPickOther={onPickOther} />
       ) : (
-      <Section title="③ 바꿔 보면" tone={pulled ? undefined : "ok"}>
+      <Section title="③ 대출 전략" tone={pulled ? undefined : "ok"}>
 
         <div style={{ marginBottom: 18 }}>
           <LeverHead title="기존 대출을 줄이면요?" />
@@ -266,14 +281,14 @@ function Cockpit({ ctx, picked, onPickOther, lever, base, price, incomeMax, inco
 
 /* ══════════════════════════════════════════════════════════════════════════
    "다른 매물도 알아볼까요?" — 방법 화면의 곁가지.
-   기본은 닫힘. 펼치면 지금 가정 그대로 DATA 전체를 다시 판정해서 보여준다.
+   기본은 닫힘. 펼치면 지금 가정·고른 동 그대로 매물을 다시 판정해서 보여준다.
    ⚠️ 여기서 매물을 고르면 '목표 매물'만 바뀐다 — 자격 답변도, 부채도, 가정도 그대로다.
       그래서 재질문이 없고, 고르는 즉시 위 내용이 새 매물 기준으로 다시 그려진다.
    ══════════════════════════════════════════════════════════════════════════ */
-function OtherUnits({ person, currentId, onSwapUnit }) {
+function OtherUnits({ person, units, currentId, onSwapUnit }) {
   const [open, setOpen] = useState(false);
-  /* 소득 화면과 같은 함수·같은 사람상태를 쓴다(verdict.judgeUnit) — 두 화면의 숫자가 갈리지 않게. */
-  const painted = useMemo(() => judgeUnits(DATA, person), [person]);
+  /* 첫 화면과 같은 함수·같은 사람상태·같은 동을 쓴다. */
+  const painted = useMemo(() => judgeUnits(units, person), [units, person]);
   const list = [...painted].sort((a, b) => a.cashNeeded - b.cashNeeded || a.price - b.price);
 
   return (

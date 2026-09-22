@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node scripts/assert-didimdol-rules.mjs"
+    "test": "node scripts/assert-didimdol-rules.mjs",
+    "fetch-units": "node scripts/fetch-units.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
