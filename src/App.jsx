@@ -82,7 +82,7 @@ export default function App() {
             <div style={eyebrow}>그린라이트</div>
             <PlacePath place={place} sheet={sheet} onGu={() => setSheet("gu")} onDong={() => setSheet("dong")} />
           </div>
-          <h1 style={h1}>내 소득으로<br />가능한 대출은 얼마일까요?</h1>
+          <h1 style={h1}>내 소득으로<br />가능한 집은 얼마일까요?</h1>
           <div style={{ marginTop: 16 }}>
             <Slider label="나의 연소득" value={income} min={0} max={12000} step={100} onChange={(v) => patch("ownIncome", v)} display={won(income) + "원"} />
           </div>
@@ -104,8 +104,8 @@ export default function App() {
             <button key={r.id} onClick={() => setModalUnit(r)} style={listItem}>
               <div>
                 <div style={{ fontSize: 15, color: C.ink, fontWeight: 700 }}>{r.name}</div>
-                <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 2 }}>{r.dong} · 전용 {r.areaM2}㎡ · {won(r.price)}원</div>
-                <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 3 }}>현금 {won(r.cashNeeded)}원</div>
+                <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 2 }}>{r.dong} · 전용 {r.areaM2}㎡ · 평균시세 {won(r.price)}원</div>
+                <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 3 }}>추가로 필요한 현금 {won(r.cashNeeded)}원</div>
               </div>
               <span style={{ fontSize: 15, color: C.greenDeep, fontWeight: 800, textAlign: "right", flex: "0 0 auto" }}>
                 대출 {won(r.loan)} ›

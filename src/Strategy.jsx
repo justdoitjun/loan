@@ -13,7 +13,7 @@
    ⚠️ 자격은 여기서 절대 다시 묻지 않는다. 자격은 Eligibility 화면에서만 받는다
       (정부 → eligibility/gov.jsx, 은행 → eligibility/bank.jsx). */
 import { useMemo, useState } from "react";
-import { PRODUCTS, LEVER, C } from "./data.js";
+import { PRODUCTS, LEVER, DEBT_KINDS, C } from "./data.js";
 import { deriveFacts, judgeAll, withAssumedIncome, won, eok, cashNeededOf } from "./engine.js";
 import { limitAt, ceilingAt } from "./products/limit.js";
 import { leverOf, detailReady } from "./person.js";
@@ -62,6 +62,7 @@ export default function Strategy({ ctx, person, pickedKey, onPickOther, detail, 
 
   const onDetail = (next) => { setDetail(next); setPull(null); };
   const pullLever = (k, v) => setPull((p) => ({ ...(p ?? {}), [k]: v }));
+  const pullDebt = (key, v) => setPull((p) => ({ ...(p ?? {}), debts: { ...(p?.debts ?? {}), [key]: v } }));
 
   return (
     <div className="slideup">
@@ -77,7 +78,7 @@ export default function Strategy({ ctx, person, pickedKey, onPickOther, detail, 
           ctx={ctx} picked={picked} onPickOther={onPickOther}
           lever={lever} base={base} price={price}
           incomeMax={incomeMax} incomeRoom={incomeRoom} incomeCap={incomeCap}
-          pulled={pull !== null} pullLever={pullLever} onReset={() => setPull(null)} />
+          pulled={pull !== null} pullLever={pullLever} pullDebt={pullDebt} onReset={() => setPull(null)} />
       )}
 
       {/* 다른 매물을 볼 때만 위 내용을 접는다. 기본은 닫힘 — 조종간이 주인공이고 이건 곁가지다. */}
@@ -129,7 +130,7 @@ const Path = ({ children }) => (
 /* ══════════════════════════════════════════════════════════════════════════
    방법 화면 본체 — 가정값(pull)은 위에서 받고, 여기서는 가정 → 한도 → 결과만 그린다.
    ══════════════════════════════════════════════════════════════════════════ */
-function Cockpit({ ctx, picked, onPickOther, lever, base, price, incomeMax, incomeRoom, incomeCap, pulled, pullLever, onReset }) {
+function Cockpit({ ctx, picked, onPickOther, lever, base, price, incomeMax, incomeRoom, incomeCap, pulled, pullLever, pullDebt, onReset }) {
   const [partsOpen, setPartsOpen] = useState(false);
   const P = PRODUCTS[picked.product];
 
@@ -153,8 +154,8 @@ function Cockpit({ ctx, picked, onPickOther, lever, base, price, incomeMax, inco
   /* 미혼에게 "배우자 소득 합산"을 안내하면 안 된다 — 소득 레버의 설명과 창구 질문이 갈린다. */
   const hasSpouse = ctx.marital !== "single";
 
-  const debtSpent = base.debt - lever.debt;
   const incomeUp = lever.income - base.income;
+  const debtKinds = DEBT_KINDS.filter((k) => base.debts[k.key] > 0);
 
   /* 이 레버들이 '통틀어' 열 수 있는 폭 = 시작 위치(base)에서 천장까지.
      0이면 손잡이만 있고 결과가 안 움직인다 — 벽이 담보(LTV)나 대출 한도라서
@@ -240,13 +241,16 @@ function Cockpit({ ctx, picked, onPickOther, lever, base, price, incomeMax, inco
         <div style={{ marginBottom: 18 }}>
           <LeverHead title="기존 대출을 줄이면요?" />
 
-          {base.debt > 0 ? (
-            <LeverRow
-              label="대출 잔액" value={lever.debt} max={base.debt} step={100}
-              display={won(lever.debt) + "원"}
-              sub={debtSpent > 0 ? `${won(base.debt)} → ${won(debtSpent)} 갚으면` : null}
-              onChange={(v) => pullLever("debt", v)} />
-          ) : (
+          {debtKinds.length > 0 ? debtKinds.map((k) => {
+            const spent = base.debts[k.key] - lever.debts[k.key];
+            return (
+              <LeverRow key={k.key}
+                label={k.label} value={lever.debts[k.key]} max={base.debts[k.key]} step={k.step ?? LEVER.debtStep}
+                display={won(lever.debts[k.key]) + "원"}
+                sub={spent > 0 ? `${won(base.debts[k.key])} 중 ${won(spent)} 줄이면` : null}
+                onChange={(v) => pullDebt(k.key, v)} />
+            );
+          }) : (
             <div style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.6, marginBottom: 10 }}>갚을 기존 대출이 없어요.</div>
           )}
         </div>

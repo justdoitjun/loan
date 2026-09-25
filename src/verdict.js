@@ -10,7 +10,7 @@
    호출부는 이 파일 하나만 알면 된다.
 
    파이프:
-     사람 + 매물가격 ─→ leverOf ─→ lever { price, income, incomeMax, debt }
+     사람 + 매물가격 ─→ leverOf ─→ lever { price, income, incomeMax, debt, debts }
         lever.income ─→ withAssumedIncome → deriveFacts → judgeAll   (자격 재판정)
         lever        ─→ limitAt(상품별)                              (통과한 것들의 구체 한도)
         필요 현금    ─→ cashNeededOf(시세, 대출)

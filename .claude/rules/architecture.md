@@ -17,9 +17,10 @@
 | `src/eligibility/bank.jsx` | **은행대출 탭.** 질문 2개(주택 보유 상태 · 배우자 소득) → 일반 주담대 카드. 은행 질문이 늘면 여기만 고친다 |
 | `src/eligibility/shared.jsx` | 두 탭이 같이 쓰는 질문 조각(YesNo · 배우자 소득 트랙 · 답변 드랍다운). 상품 지식 없음 |
 | `src/Strategy.jsx` | **방법 화면.** 부채 입력 → 필요 현금 + 게이지 → 기존 대출을 줄이면 / 소득이 인정되면 (또는 `leversInert`) |
-| `src/DetailInfo.jsx` | **부채 잔액 입력** = 가정의 시작 위치. Strategy 상단 |
+| `src/DetailInfo.jsx` | **부채를 종류별로 입력**(`data.DEBT_KINDS`) = 가정의 시작 위치. Strategy 상단 |
 | `src/IncomeCheck.jsx` | **소득 신뢰도 자가진단.** 소득유형 선택 → 체크리스트 → 초록/노랑 논조 |
-| `src/engine.js` | 계산·판정 전부(중복 정의 금지). JSX 금지 |
+| `src/engine.js` | 계산·판정 전부(중복 정의 금지). JSX 금지. 은행 기존부채 연상환은 `engine_bank_dsr.js`를 호출 |
+| `src/engine_bank_dsr.js` | **은행 DSR 기존 부채의 종류별 연 상환액.** 파라미터는 `DEBT_KINDS[].dsr`. 디딤돌은 호출하지 않음 |
 | `src/data.js` | 매물·예산규칙·상품 **금융 파라미터**·`LEVER`(레버 범위)·화면 상수. 로직 금지 |
 | `src/data/units.json` | 노원 실거래 스냅샷(정적). 수집 스크립트가 갈아끼운다. 앱은 스크립트를 import하지 않는다 |
 | `src/data/incomeRules.js` | 디딤돌 **소득 인정 규정 원문 보존본**(엑셀 구조화, 원문 대조 완료). 요약으로 덮어쓰지 말 것. 화면은 `ACTIVE_INCOME_TYPES`(소득추정 제외) |

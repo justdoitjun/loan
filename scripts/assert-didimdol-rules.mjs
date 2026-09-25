@@ -1,15 +1,15 @@
-/* 규칙 문서(.claude/rules/products/didimdol.md) vs 실제 출고 함수.
+/* 규칙 문서(.claude/rules/products/gov/didimdol.md) vs 실제 출고 함수.
    기대값은 이 파일에 적지 않고 규칙 원문에서 읽는다.
    판정은 engine.deriveFacts → judgeRule / judgeAll / didimdolDtiLimit 로만 한다. */
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildCtx, deriveFacts, judgeAll, judgeRule, didimdolDtiLimit, annualDebtService } from "../src/engine.js";
+import { buildCtx, deriveFacts, judgeAll, judgeRule, didimdolDtiLimit, annualDebtService, debtTotal, combinedDebtBalance } from "../src/engine.js";
 import { DIDIMDOL_RULES } from "../src/products/didimdol.js";
 import { limitAt } from "../src/products/limit.js";
-import { EMPTY_ELIG } from "../src/person.js";
+import { EMPTY_ELIG, EMPTY_PERSON, leverOf, debtsFrom } from "../src/person.js";
 import { ACTIVE_INCOME_TYPES, INCOME_TYPES } from "../src/data/incomeRules.js";
-import { DIDIMDOL_DTI, DIDIMDOL_LOAN_RATE, ESTIMATED_DEBT_RATE, PRODUCTS } from "../src/data.js";
+import { DIDIMDOL_DTI, DIDIMDOL_LOAN_RATE, ESTIMATED_DEBT_RATE, PRODUCTS, DEBT_KINDS } from "../src/data.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const scratch = process.env.SCRATCH || process.cwd();
@@ -26,7 +26,7 @@ const man = (s) => {
   throw new Error("금액 파싱 실패: " + s);
 };
 
-const md = readFileSync(join(root, ".claude/rules/products/didimdol.md"), "utf8");
+const md = readFileSync(join(root, ".claude/rules/products/gov/didimdol.md"), "utf8");
 
 /* ── 1) 일반가구 표 → 출고 judgeRule ── */
 const generalTable = [...md.matchAll(/^\| ([^|]+) \| ([^|]+) \| ([^|]+) \| ([^|]+) \|$/gm)]
@@ -167,6 +167,47 @@ function grab(section, re) {
   const strat = readFileSync(join(root, "src/Strategy.jsx"), "utf8");
   if (strat.includes("incomeRules")) fail("Strategy", "incomeRules 를 끌어와 한도에 반영하면 안 됨");
   else ok("Strategy 는 인정소득 산식을 한도에 안 넣음");
+}
+
+/* ── 6) 기존 대출 종류 — 목록 하나. 은행 DSR 환산은 종류별, 디딤돌 합계는 그대로 ── */
+{
+  const labels = ["마이너스통장 한도", "신용대출 잔액", "전세대출 잔액", "주택담보 잔액", "비주택 담보 잔액", "카드사/보험사 대출", "자동차 대출 잔액"];
+  if (DEBT_KINDS.map((k) => k.label).join("|") !== labels.join("|")) fail("DEBT_KINDS", DEBT_KINDS.map((k) => k.label).join(", "));
+  else ok("대출 종류 7개");
+
+  const detailSrc = readFileSync(join(root, "src/DetailInfo.jsx"), "utf8");
+  const stratSrc = readFileSync(join(root, "src/Strategy.jsx"), "utf8");
+  if (!detailSrc.includes("DEBT_KINDS") || !stratSrc.includes("DEBT_KINDS")) fail("화면", "종류 목록을 그리지 않음");
+  else if (detailSrc.includes('label="대출"') || stratSrc.includes('label="대출 잔액"')) fail("화면", "합친 슬라이더가 남아 있음");
+  else ok("입력·줄이기는 DEBT_KINDS만 그린다");
+
+  const entered = { minus: 1000, credit: 2000, jeonse: 3000, mortgage: 4000, cardIns: 500, auto: 600, dropped: 99999 };
+  const normalized = debtsFrom(entered);
+  if (Object.hasOwn(normalized, "dropped")) fail("debtsFrom", "목록 밖 키가 남음");
+  else if (debtTotal(normalized) !== 11100) fail("debtTotal", String(debtTotal(normalized)));
+  else ok("목록 밖 종류는 합계에서 빠진다");
+
+  const person = {
+    ...EMPTY_PERSON,
+    ownIncome: 5000,
+    detail: { ...EMPTY_PERSON.detail, debtConfirmed: true, debts: normalized },
+    pull: { debts: { credit: 500, mortgage: 0 } },
+  };
+  const base = leverOf(person, 40000, null, false);
+  const lever = leverOf(person, 40000, null, true);
+  const unconfirmed = leverOf({ ...person, detail: { ...person.detail, debtConfirmed: false } }, 40000, null, true);
+  if (base.debt !== 11100) fail("base sum", String(base.debt));
+  else if (lever.debts.credit !== 500 || lever.debts.mortgage !== 0 || lever.debts.minus !== 1000) fail("pull", JSON.stringify(lever.debts));
+  else if (lever.debt !== 5600) fail("pull sum", String(lever.debt));
+  else if (unconfirmed.debt !== 0) fail("unconfirmed", String(unconfirmed.debt));
+  else ok("종류별로 줄인 금액이 합계가 된다");
+
+  const honest = limitAt("bank", base, null);
+  const lying = limitAt("bank", { ...base, debt: 0, debts: base.debts }, null);
+  if (lying.limit !== honest.limit) fail("debts win", `${lying.limit} vs ${honest.limit}`);
+  else if (combinedDebtBalance({ debts: lever.debts, balance: 0 }) !== lever.debt) fail("combined", "debts가 balance보다 우선하지 않음");
+  else if (combinedDebtBalance({ balance: 1234 }) !== 1234) fail("combined", "debts 없으면 balance");
+  else ok("산식 입구는 종류 합계");
 }
 
 try {

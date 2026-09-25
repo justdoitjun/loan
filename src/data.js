@@ -68,12 +68,43 @@ export const REGION_CAP = [
   { upTo: 250000, cap: { regulated: 40000, metroOther: 40000, local: null } },
   { upTo: Infinity, cap: { regulated: 20000, metroOther: 20000, local: null } },
 ];
+/* 기존 대출 종류. DetailInfo(입력)와 Strategy(얼마를 줄일지)는 이 배열만 그린다.
+   종류를 늘리거나 줄이려면 여기만 고친다. key는 저장 키라서 바꾸면 그 값은 사라진다.
+   max는 확정 전 입력 천장(만원)이다. 규제 한도도 DSR 산식도 아니다.
+   빼면 LEVER.debtMax를 쓴다. step을 빼면 LEVER.debtStep.
+   dsr은 은행이 이 금액을 1년 상환액으로 볼 때의 파라미터다. 함수는 두지 않는다.
+   계산은 engine_bank_dsr.js. 디딤돌 DTI는 이 필드를 읽지 않는다.
+     method "principalPlusInterest"  잔액 ÷ years + 이자. years를 빼면 5년.
+     method "interest"               이자만. 원금은 넣지 않는다.
+     method "principal"              잔액 ÷ years. 이자는 넣지 않는다.
+     method "actual"                 실제 1년 원리금. 잔액으로 나누지 않는다.
+     method "split"                  principalPlusInterest와 같다. 이번 규칙에 없는 종류의 임시식.
+   월상환액·만기 필드를 넣지 말 것. 화면에서 묻지 않는 값이다. */
+export const DEBT_KINDS = [
+  // TODO: 마이너스통장은 이번 종류 규칙에 없다. 임시로 한도 전액을 5년 분할 + 이자 가정.
+  { key: "minus", label: "마이너스통장 한도", max: 20000, dsr: { method: "split" } },
+  // 원금은 잔액 ÷ 5년. 이자는 실제 부담액 — 받기 전 처리는 engine_bank_dsr.js TODO.
+  { key: "credit", label: "신용대출 잔액", max: 30000, dsr: { method: "principalPlusInterest", years: 5 } },
+  // 원금은 넣지 않는다. 이자만.
+  { key: "jeonse", label: "전세대출 잔액", max: 80000, dsr: { method: "interest" } },
+  // 실제 갚는 1년 원리금. 잔액을 만기로 나누지 않는다.
+  { key: "mortgage", label: "주택담보 잔액", max: 150000, dsr: { method: "actual" } },
+  // 원금은 잔액 ÷ 8년. 이자는 실제 연간 부담액.
+  { key: "nonHome", label: "비주택 담보 잔액", max: 30000, dsr: { method: "principalPlusInterest", years: 8 } },
+  // TODO: 카드대출 원금은 약정만기, 최장 3년. 만기를 안 물어 3년으로 고정. 보험사 대출도 이 칸에 있다.
+  { key: "cardIns", label: "카드사/보험사 대출", max: 10000, dsr: { method: "principal", years: 3 } },
+  // TODO: 자동차는 이번 종류 규칙에 없다. 임시로 5년 분할 + 이자 가정.
+  { key: "auto", label: "자동차 대출 잔액", max: 15000, dsr: { method: "split" } },
+];
+
 /* ✏️ 여기 2-b — 조종간(Strategy) 레버의 움직임 범위. 전부 가상값 — 실제 관행으로 교체.
    가정 금리·만기는 여기 두지 않는다(RULE.creditRate / RULE.creditYears가 유일한 출처). */
 export const LEVER = {
-  /* 부채는 '잔액' 하나만 받는다. 두 잣대 모두 잔액에서 출발하기 때문 —
-     디딤돌 DTI는 잔액 × 추정금리(이자만), 은행 DSR은 잔액을 원리금으로 환산. 월상환액은 안 묻는다.
-     부채 레버 최댓값 = 지금 확정한 잔액. 소득 레버 최댓값 = 3억(상품 소득상한이 더 낮으면 거기서 자른다). */
+  /* 줄이기 슬라이더의 최댓값은 종류별로 확정한 금액이다(0까지 줄일 수 있다).
+     debtMax·debtStep은 종류 항목에 max·step이 없을 때의 입력 범위(만원). 정책 한도가 아니다.
+     소득 레버 최댓값 = 3억(상품 소득상한이 더 낮으면 거기서 자른다). */
+  debtMax: 30000,
+  debtStep: 100,
   incomeMax: 30000,
   incomeStep: 100,
 };
@@ -126,8 +157,8 @@ export const PRODUCTS = {
      ① 본건 디딤돌 원리금만 계산한다. 나머지 세 항은 engine.didimdolDtiLimit의
         otherFundLoanAnnual / repayingMortgageAnnual 인자로 열어두되 기본값 0
         — 기금 주담대 중복 보유는 드문 케이스라 가정.
-     ② 세부 항목을 구분하지 않고 '기타 대출 잔액(신용대출+기타)' 하나로 근사한다.
-        전세자금대출·예적금담보대출 차감은 상담역 확인 영역(가드레일 3).
+     ② 입력은 종류별로 받되(DEBT_KINDS), 산식은 아직 그 합계를 '기타 대출 잔액'으로 넣는다.
+        전세·주담대를 빼는 구분은 아직 없다. 자리는 engine.combinedDebtBalance.
 
    계산식은 engine.didimdolDtiLimit 하나에만 있다. 은행 DSR(engine.repaymentCapacity)과 섞지 말 것.
    ══════════════════════════════════════════════════════════════════════════ */

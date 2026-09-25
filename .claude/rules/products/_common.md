@@ -29,12 +29,14 @@
 
 | | 기금 DTI | 은행 DSR |
 |---|---|---|
-| 함수 | `engine.didimdolDtiLimit` | `engine.repaymentCapacity` + `annualDebtService` |
+| 함수 | `engine.didimdolDtiLimit` | `engine.repaymentCapacity`. 기존 부채는 `engine_bank_dsr.bankExistingAnnual` |
 | 기존 부채를 보는 법 | **이자만** (잔액 × 추정금리) | **원리금 전체** |
 | 쓰는 상품 | 디딤돌 (`capacityModel: "fundDTI"`) · 보금자리는 ❓ 아직 DSR 잣대 | 은행 일반 주담대 (`products/bank/bank.md`) · 보금자리(임시) |
 
 어느 잣대를 쓰는지는 **상품 데이터**가 정한다(`PRODUCTS[key].capacityModel`). 화면·엔진에서 `if (productKey === ...)`로 분기하지 말 것.
-사용자에게 받는 부채는 **잔액 하나뿐**이고 해석(이자만/원리금)은 잣대가 한다(`products/limit.js`의 `DEBT_VIEW`).
+사용자에게 받는 부채는 **종류별 금액**(`data.DEBT_KINDS`)이고, 월상환액·만기는 묻지 않는다.
+은행 DSR은 종류별 파라미터(`DEBT_KINDS[].dsr`)를 `engine_bank_dsr.js`가 1년 상환액으로 바꾼다. 디딤돌 DTI는 아직 그 합계에 이자만 곱한다(`engine.combinedDebtBalance`).
+이자만 볼지 원리금으로 볼지는 상품 잣대가 한다(`products/limit.js`의 `DEBT_VIEW`). 보금자리(임시)는 이자만이라 종류별 DSR 표를 타지 않는다.
 
 ## 상품별 Cap
 정부상품은 종별 대출한도(`products/gov/*.md`, 코드 `loanCap` 티어). 은행 일반 주담대는 **상품별 cap 없음**(`cap: null`) — 아래 지역별 cap이 대신 건다.

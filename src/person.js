@@ -15,8 +15,8 @@
      Strategy     → pull       (레버를 당긴 값) ⚠️ 로컬 state 아님 — 화면을 나가도 유지된다
      IncomeCheck  → incomeCheck(소득 신뢰도 자가진단)
      소득 화면     → ownIncome */
-import { LEVER } from "./data.js";
-import { ageOf, spouseIncomeOf } from "./engine.js";
+import { LEVER, DEBT_KINDS } from "./data.js";
+import { ageOf, spouseIncomeOf, debtTotal } from "./engine.js";
 
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
@@ -138,9 +138,22 @@ export function withSpouse(s, v) {
 /* ══════════════════════════════════════════════════════════════════════════
    2) 부채 · 소득의 질 (DetailInfo가 채운다) — 레버의 시작 위치
    ══════════════════════════════════════════════════════════════════════════ */
-/* debt는 0(왼쪽 끝)에서 시작 — 무부채도 유효한 값이라 처음부터 실제 값으로 둔다
-   ("답 안 함"을 표현하는 건 debtConfirmed의 역할이다). */
-export const EMPTY_DETAIL = { debt: 0, debtConfirmed: false, incomeQuality: { type: null, stable: null } };
+/* 종류마다 0에서 시작 — 무부채도 유효한 값이라 처음부터 실제 값으로 둔다
+   ("답 안 함"을 표현하는 건 debtConfirmed의 역할이다).
+   키 목록은 DEBT_KINDS. 여기 필드를 종류마다 적어 두지 않는다. */
+export function emptyDebts() {
+  return Object.fromEntries(DEBT_KINDS.map((k) => [k.key, 0]));
+}
+
+/* 목록에 있는 종류만 남긴다. 뺀 종류의 값은 사라지고, 새 종류는 0이다. */
+export function debtsFrom(raw) {
+  const out = emptyDebts();
+  if (raw == null || typeof raw !== "object") return out;
+  for (const k of DEBT_KINDS) out[k.key] = Math.max(Number(raw[k.key]) || 0, 0);
+  return out;
+}
+
+export const EMPTY_DETAIL = { debts: emptyDebts(), debtConfirmed: false, incomeQuality: { type: null, stable: null } };
 
 /* 레버를 그릴 수 있는가. 부채는 값이 아니라 '확정 여부'로 본다
    — 슬라이더를 만지작거리는 중간값으로 레버가 그려지면 안 된다.
@@ -166,9 +179,10 @@ export const EMPTY_PERSON = {
   /* ⚠️ 배우자 소득은 elig.spouseBand에 있다. 본인 소득(ownIncome)과 출처가 다르다 —
         본인은 소득 화면 슬라이더, 배우자는 자격 화면 밴드. 합치는 건 engine.buildCtx의 일이다. */
   elig: EMPTY_ELIG,
-  detail: EMPTY_DETAIL,
-  /* 레버를 당긴 값 { debt, income } · null = 아직 한 번도 안 당김(유도 애니메이션 신호).
-     시작 위치(detail)와 당긴 값(pull)을 따로 두는 이유: "얼마나 움직였나"(= 행동 번역)를
+  detail: { ...EMPTY_DETAIL, debts: emptyDebts() },
+  /* 레버를 당긴 값 { debts, income } · null = 아직 한 번도 안 당김(유도 애니메이션 신호).
+     debts는 종류별 '줄인 뒤 금액'. 없는 키는 확정값 그대로다. 합계는 여기 두지 않는다.
+     시작 위치(detail)와 당긴 값(pull)을 따로 두는 이유: "얼마나 움직였나"를
      둘의 차이로 계산하기 때문. 하나로 합치면 '원래 얼마였는지'가 사라진다. */
   pull: null,
   incomeCheck: EMPTY_INCOME_CHECK,
@@ -183,7 +197,7 @@ export const personReady = (person) => eligReady(person.elig) || bankReady(perso
 export const totalIncomeOf = (person) => person.ownIncome + spouseIncomeOf(person.elig);
 
 /* ── 사람 상태 → 레버 값 ──
-   products/limit.js가 요구하는 계약 { price, income, incomeMax, debt }를 만든다.
+   products/limit.js가 요구하는 계약 { price, income, incomeMax, debt, debts }를 만든다.
    가격만 매물에서 오고 나머지는 전부 사람에게서 온다 — 이 함수가 그 경계다.
 
    incomeCap = 이 상품의 소득상한(만원). 넘기면 소득 레버가 거기서 잘린다 —
@@ -197,13 +211,21 @@ export function leverOf(person, price, incomeCap = null, pulled = true) {
      이미 상한을 넘었으면 범위가 뒤집히지 않게 현재 소득을 바닥으로 깐다. */
   const ceiling = Math.min(incomeCap ?? LEVER.incomeMax, LEVER.incomeMax);
   const incomeMax = Math.max(ceiling, income);
-  /* 확정 전엔 부채를 0으로 본다 — 슬라이더를 만지작거리는 중간값으로 지도가 흔들리면 안 된다. */
-  const debtBase = person.detail.debtConfirmed ? person.detail.debt : 0;
+  /* 확정 전엔 부채를 0으로 본다 — 슬라이더를 만지작거리는 중간값으로 지도가 흔들리면 안 된다.
+     줄이기는 종류마다 0~확정액. 확정액보다 크게 남은 당김은 확정액으로 자른다. */
+  const debtBase = person.detail.debtConfirmed ? debtsFrom(person.detail.debts) : emptyDebts();
   const pull = pulled ? person.pull : null;
+  const debts = {};
+  for (const k of DEBT_KINDS) {
+    const ceiling = debtBase[k.key];
+    const raw = pull?.debts && pull.debts[k.key] != null ? Number(pull.debts[k.key]) : ceiling;
+    debts[k.key] = clamp(Number.isFinite(raw) ? raw : ceiling, 0, ceiling);
+  }
   return {
     price,
     income: clamp(pull?.income ?? income, income, incomeMax),
     incomeMax,
-    debt: clamp(pull?.debt ?? debtBase, 0, debtBase),
+    debts,
+    debt: debtTotal(debts),
   };
 }

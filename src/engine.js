@@ -1,8 +1,9 @@
 /* 계산 로직 한 곳. 화면(JSX)을 넣지 말 것.
    여러 페이지가 여기서만 import 한다 — 파일마다 다시 정의하면 규칙이 갈라진다.
    역할 분담: 상품 '규칙 데이터'는 src/products/*, 그 데이터를 읽는 '판정·계산'은 여기. */
-import { RULE, REGION, REGION_CAP, PRODUCTS, SPOUSE_INCOME_BANDS, INCOME_EDGE_MARGIN, ESTIMATED_DEBT_RATE, DIDIMDOL_LOAN_RATE, DIDIMDOL_DTI } from "./data.js";
+import { RULE, REGION, REGION_CAP, PRODUCTS, DEBT_KINDS, SPOUSE_INCOME_BANDS, INCOME_EDGE_MARGIN, ESTIMATED_DEBT_RATE, DIDIMDOL_LOAN_RATE, DIDIMDOL_DTI } from "./data.js";
 import { PRODUCT_RULES, NEWBORN_RULE, NEWLYWED_YEARS, WEDDING_SOON_MONTHS } from "./products/index.js";
+import { bankExistingAnnual } from "./engine_bank_dsr.js";
 
 /* ── 포맷 ── */
 export const eok = (man) => (man / 10000).toFixed(1) + "억";
@@ -29,16 +30,30 @@ const monthsBetween = (from, to) => (to.getFullYear() - from.getFullYear()) * 12
 
 /* ── 부채 ── */
 /* 자격 화면은 부채를 묻지 않는다 — 자격은 소득상한 위/아래로 갈리지 부채로 갈리지 않기 때문.
-   부채는 상품을 고른 뒤 Strategy(조종간)의 '부채 레버' 값으로 들어온다.
+   부채는 상품을 고른 뒤 Strategy의 줄이기 값으로 들어온다.
+   사용자에게 받는 값은 종류별 금액(data.DEBT_KINDS)이다. 월상환액·만기는 묻지 않는다.
 
-   ⚠️ 사용자에게 받는 부채 입력은 **잔액 하나뿐이다**(신용대출·마이너스통장·할부 등을 합친 대충값).
-      월상환액은 묻지 않는다 — 두 잣대 모두 잔액에서 출발하고, 해석만 다르기 때문이다.
-
+   은행 DSR의 종류별 연 상환액은 engine_bank_dsr.js가 만든다. 이 파일은 그 함수를 부르기만 한다.
+   디딤돌 DTI는 아래 combinedDebtBalance 합계에 이자만 곱한다.
    여기(DSR 계열) view = 상품이 그 잔액을 보는 잣대:
      "interestOnly"          이자만 본다
      "principalAndInterest"  원리금으로 본다 (은행 DSR 관행 근사)
-   ⚠️ 디딤돌은 이 함수를 쓰지 않는다 — 디딤돌 DTI는 아래 didimdolDtiLimit / otherDebtInterest.
+   ⚠️ 디딤돌은 annualDebtService를 쓰지 않는다 — 디딤돌 DTI는 아래 didimdolDtiLimit / otherDebtInterest.
    ✏️ 가정 금리·만기는 RULE.creditRate / RULE.creditYears — 전부 가상값. 실제 값으로 교체할 것. */
+
+/* DEBT_KINDS에 있는 키만 더한다. 목록에서 뺀 종류는 합계에서도 빠진다. */
+export function debtTotal(debts) {
+  return DEBT_KINDS.reduce((sum, k) => sum + num(debts?.[k.key]), 0);
+}
+
+/* 디딤돌 DTI에 넣는 기존 부채 잔액 합계(만원).
+   debts가 있으면 종류 합계를 쓰고, 없으면 balance 숫자 하나를 쓴다.
+   은행 DSR은 이 합계를 쓰지 않는다 — engine_bank_dsr.bankExistingAnnual. */
+export function combinedDebtBalance(debt) {
+  if (debt?.debts != null) return debtTotal(debt.debts);
+  return num(debt?.balance);
+}
+
 export function annualDebtService(debtBalance, view = "principalAndInterest") {
   const d = num(debtBalance);
   if (d <= 0) return 0;
@@ -91,7 +106,8 @@ const didimdolDtiOpts = (opts = {}) => ({
         + 동일 금융기관 실행예정 기금주담대 + 기존 기금주담대 − 상환예정 주담대
      ↳ MVP는 본건만 계산한다. 나머지 세 항은 opts로 열려 있고 기본값이 0이다.
    ② = 잔액 × ESTIMATED_DEBT_RATE. 기존 부채에서 보는 건 이자뿐이다 —
-        원금 상환 스케줄(월상환액·산정만기)은 보지 않는다. 그래서 사용자에게도 '잔액'만 물으면 된다.
+        원금 상환 스케줄(월상환액·산정만기)은 보지 않는다.
+        입력은 종류별 금액이고, 지금은 combinedDebtBalance의 합계에 이 이자를 적용한다.
         은행 DSR용 annualDebtService를 여기 쓰면 안 된다.
 
    ⚠️ 두 금리는 다른 값이다: ①은 DIDIMDOL_LOAN_RATE(디딤돌 자체 금리),
@@ -162,17 +178,24 @@ export function evaluate(unit, dsrCap) {
    cap이 null이면 '상품 자체 한도 없음'(은행) → 그 항은 Min에서 빠진다.
    지역별 cap은 PRODUCTS[key].regionCapped인 상품에만 붙는다(정부상품은 제한 없음). 값은 regionCapOf.
 
-   debt = 레버에서 온 raw 부채 { balance, view } (만원). null이면 무부채(천장 잣대).
-   받는 건 잔액 하나뿐이고, 그걸 이자로 볼지 원리금으로 볼지는 잣대가 정한다.
-   상환능력을 어떤 식으로 볼지는 상품 데이터(PRODUCTS[key].capacityModel)가 정한다 —
-   여기서 productKey로 분기하지 말 것. fundDTI = 디딤돌 DTI식 / 그 외 = 은행 DSR식(보수적 기본값). */
+   debt = 레버에서 온 raw 부채 { balance, debts, view } (만원). null이면 무부채(천장 잣대).
+   디딤돌은 combinedDebtBalance 합계에 이자를 곱한다.
+   은행 DSR(원리금)은 engine_bank_dsr.bankExistingAnnual이 종류별로 연 상환액을 만든다.
+   이자만 보는 상품(보금자리 임시)은 합계에 annualDebtService interestOnly를 쓴다.
+   상환능력을 어떤 식으로 볼지는 상품 데이터(capacityModel · view)가 정한다.
+   productKey로 분기하지 말 것. fundDTI = 디딤돌 DTI. 원리금 view = 은행 종류별 DSR. */
 export function limitParts(p, price, income, debt = null, capOverride = null) {
   const ltv = Math.max(price * p.LTV - (p.offsetsRoomDeduction ? 0 : RULE.roomDeduction), 0);
-  const balance = debt?.balance ?? 0;
+  const balance = combinedDebtBalance(debt);
 
-  /* 디딤돌: DTI(기존 부채는 이자만) / 그 외: DSR(기존 부채를 원리금으로) */
+  /* 디딤돌: DTI(합계 × 이자). 이자만 보는 상품: 합계 × 금리.
+     은행 DSR: 종류별 연 상환액. 스트레스 금리는 아래 본건 금리에만 더한다. */
   const fund = p.capacityModel === "fundDTI";
-  const existingAnnual = fund ? otherDebtInterest(balance) : annualDebtService(balance, debt?.view);
+  const existingAnnual = fund
+    ? otherDebtInterest(balance)
+    : debt?.view === "interestOnly"
+      ? annualDebtService(balance, "interestOnly")
+      : bankExistingAnnual(debt);
   /* 은행 DSR: 본건 환산금리 = 가정금리 + 스트레스 가산(stressRate, 없으면 0). 산정만기는 상품 데이터(years), 없으면 30년. */
   const capacity = fund
     ? didimdolDtiLimit(income, balance)   // 금리·만기·DTI상한은 data.js의 디딤돌 파라미터가 정한다

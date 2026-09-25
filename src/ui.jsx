@@ -44,6 +44,16 @@ export const css = `
   .sheet-sub{grid-area:sub;margin:3px 0 0;font-size:13px;line-height:1.4;font-weight:600;color:#5B6660;}
   .sheet-pin{flex:0 0 auto;padding:0 16px 10px;}
   .sheet-body{overflow-y:auto;overscroll-behavior:contain;padding:2px 16px 18px;-webkit-overflow-scrolling:touch;}
+  /* 키패드 시트: 휴대폰 화면의 60%. 창이 그보다 길면 가장 큰 휴대폰 시트(560px)에서 멈춘다.
+     내용이 넘치면 스크롤하지 않고, 숫자 키가 남은 높이를 나눠 갖는다. */
+  .sheet-panel[data-fit="keypad"]{height:min(60dvh,560px);min-height:min(432px,72dvh);max-height:min(72dvh,560px);overflow:hidden;}
+  .sheet-panel[data-fit="keypad"] .sheet-grab{height:18px;}
+  .sheet-panel[data-fit="keypad"] .sheet-head{position:relative;grid-template-columns:1fr;grid-template-areas:"title" "sub";padding:0 52px 4px 16px;}
+  .sheet-panel[data-fit="keypad"] .sheet-backslot{display:none;}
+  .sheet-panel[data-fit="keypad"] .sheet-x{position:absolute;top:0;right:10px;width:36px;height:36px;}
+  .sheet-panel[data-fit="keypad"] .sheet-title{margin:0;font-size:17px;line-height:1.25;}
+  .sheet-panel[data-fit="keypad"] .sheet-sub{margin:1px 0 0;font-size:12px;line-height:1.3;}
+  .sheet-panel[data-fit="keypad"] .sheet-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;padding:0 16px 12px;}
   .sheet-pane{animation:sheetpane .2s ease;}
   @keyframes sheetpane{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
   .place-gus{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
@@ -230,7 +240,7 @@ export function useOverlayLock(onClose, panelRef) {
 
 /* 아래쪽에 붙는 선택 시트. 손잡이를 아래로 끌면 닫힌다.
    closeRef를 넘기면 고른 뒤에도 같은 닫힘 동작으로 사라진다. */
-export function BottomSheet({ title, subtitle, back, pinned, onClose, closeRef, bodyRef, children }) {
+export function BottomSheet({ title, subtitle, back, pinned, onClose, closeRef, bodyRef, fit, children }) {
   const titleId = useId();
   const headingRef = useRef(null);
   const panelRef = useRef(null);
@@ -327,6 +337,7 @@ export function BottomSheet({ title, subtitle, back, pinned, onClose, closeRef, 
       <div
         ref={panelRef}
         className="sheet-panel"
+        data-fit={fit || undefined}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

@@ -16,6 +16,6 @@ export const BANK_RULES = [
     priceCap:  [{ when: [], value: null, label: "가격상한 없음" }],
     areaCap: null,
     loanCap:   [{ when: [], value: null, label: "상품 한도 없음 — 지역별 한도만" }],
-    note: "자격 대신 담보와 상환능력(DSR 40%)이 전부예요. 금리는 정부대출보다 높지만 실행이 빨라 잔금일이 급하면 이쪽이 열려요.",
+    note: "담보와 상환능력이 전부예요. 금리는 정부대출보다 높지만 실행이 빨라 잔금일이 급하면 이쪽이 열려요.",
   },
 ];
