@@ -50,7 +50,10 @@ export const css = `
   .sheet-panel[data-fit="keypad"] .sheet-grab{height:18px;}
   .sheet-panel[data-fit="keypad"] .sheet-head{position:relative;grid-template-columns:1fr;grid-template-areas:"title" "sub";padding:0 52px 4px 16px;}
   .sheet-panel[data-fit="keypad"] .sheet-backslot{display:none;}
-  .sheet-panel[data-fit="keypad"] .sheet-x{position:absolute;top:0;right:10px;width:36px;height:36px;}
+  /* 보이는 원은 24px. 탭 영역만 44px. 글자 ×는 글자틀이 커서 원 안에 작게 남으므로 획으로 그린다. */
+  .sheet-panel[data-fit="keypad"] .sheet-x{position:absolute;top:0;right:4px;width:44px;height:44px;display:grid;place-items:center;background:transparent;color:transparent;font-size:0;line-height:0;}
+  .sheet-panel[data-fit="keypad"] .sheet-x::before{content:"";grid-area:1/1;width:24px;height:24px;border-radius:50%;background:#F4F6F3;}
+  .sheet-panel[data-fit="keypad"] .sheet-x::after{content:"";grid-area:1/1;width:9px;height:9px;background:linear-gradient(#5B6660,#5B6660) center/6.4px 1.5px no-repeat,linear-gradient(#5B6660,#5B6660) center/1.5px 6.4px no-repeat;transform:rotate(45deg);}
   .sheet-panel[data-fit="keypad"] .sheet-title{margin:0;font-size:17px;line-height:1.25;}
   .sheet-panel[data-fit="keypad"] .sheet-sub{margin:1px 0 0;font-size:12px;line-height:1.3;}
   .sheet-panel[data-fit="keypad"] .sheet-body{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;padding:0 16px 12px;}
@@ -79,6 +82,8 @@ export const css = `
     .place-gu:hover,.place-dong:hover{background:#F7FAF7;border-color:#D5DCD6;}
     .place-gu[aria-current="true"]:hover,.place-dong[aria-current="true"]:hover{background:#E8F4EF;border-color:#14705A;}
     .sheet-x:hover{background:#E8EEE9;}
+    .sheet-panel[data-fit="keypad"] .sheet-x:hover{background:transparent;}
+    .sheet-panel[data-fit="keypad"] .sheet-x:hover::before{background:#E8EEE9;}
     .path-btn:hover{color:#0E5343;}
   }
   .place-gu:active,.place-dong:active{background:#E7F0EA;}

@@ -184,7 +184,7 @@ function BalancePad({ pad, total, onDigits, onClose, onCommit }) {
           <button key={key} type="button" className={key === "←" || key === "00" ? "kp-key fn" : "kp-key"}
             aria-label={key === "←" ? "마지막 자리 지우기" : key}
             onClick={() => pushDigits(key)}>
-            {key}
+            <span className="kp-glyph">{key}</span>
           </button>
         ))}
       </div>
@@ -232,8 +232,14 @@ const DEBT_CSS = `
   .kp-hint{margin-top:2px;min-height:1.25em;font-size:13px;font-weight:700;color:#14705A;}
   .kp-hint.soft{color:#5B6660;}
   .kp-grid{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(4,minmax(0,1fr));gap:6px;}
-  .kp-key{height:auto;min-height:0;border:none;border-radius:14px;background:#F4F6F3;color:#1E2A24;font-size:22px;font-weight:700;cursor:pointer;font-variant-numeric:tabular-nums;}
+  .kp-key{container-type:size;height:auto;min-height:0;padding:0;display:flex;align-items:center;justify-content:center;border:none;border-radius:14px;background:#F4F6F3;color:#1E2A24;font-size:22px;font-weight:700;line-height:1;cursor:pointer;font-variant-numeric:tabular-nums;}
   .kp-key.fn{font-size:16px;font-weight:800;color:#5B6660;}
+  .kp-glyph{font-size:22px;font-weight:inherit;line-height:1;color:inherit;}
+  .kp-key.fn .kp-glyph{font-size:16px;}
+  @supports (font-size:1cqmin){
+    .kp-glyph{font-size:clamp(16px,42cqmin,28px);}
+    .kp-key.fn .kp-glyph{font-size:clamp(13px,30cqmin,20px);}
+  }
   .kp-key:active{background:#E4EDE7;}
   .kp-go{flex:0 0 auto;width:100%;margin-top:8px;height:46px;border:none;border-radius:14px;background:#14705A;color:#fff;font-size:16px;font-weight:800;cursor:pointer;}
   .kp-go:active{background:#0E5343;}

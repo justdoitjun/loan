@@ -5,11 +5,12 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildCtx, deriveFacts, judgeAll, judgeRule, didimdolDtiLimit, annualDebtService, debtTotal, combinedDebtBalance } from "../src/engine.js";
+import { bankExistingAnnual } from "../src/engine_bank_dsr.js";
 import { DIDIMDOL_RULES } from "../src/products/didimdol.js";
 import { limitAt } from "../src/products/limit.js";
 import { EMPTY_ELIG, EMPTY_PERSON, leverOf, debtsFrom } from "../src/person.js";
 import { ACTIVE_INCOME_TYPES, INCOME_TYPES } from "../src/data/incomeRules.js";
-import { DIDIMDOL_DTI, DIDIMDOL_LOAN_RATE, ESTIMATED_DEBT_RATE, PRODUCTS, DEBT_KINDS } from "../src/data.js";
+import { DIDIMDOL_DTI, DIDIMDOL_LOAN_RATE, ESTIMATED_DEBT_RATE, PRODUCTS, DEBT_KINDS, RULE } from "../src/data.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const scratch = process.env.SCRATCH || process.cwd();
@@ -208,6 +209,21 @@ function grab(section, re) {
   else if (combinedDebtBalance({ debts: lever.debts, balance: 0 }) !== lever.debt) fail("combined", "debts가 balance보다 우선하지 않음");
   else if (combinedDebtBalance({ balance: 1234 }) !== 1234) fail("combined", "debts 없으면 balance");
   else ok("산식 입구는 종류 합계");
+
+  const annual = (key, amount) => bankExistingAnnual({ debts: { [key]: amount } });
+  const interest = 1000 * (RULE.creditRate + PRODUCTS.bank.stressRate);
+  const creditLike = 1000 / 5 + interest;
+  const minusSpec = DEBT_KINDS.find((k) => k.key === "minus").dsr;
+  const creditSpec = DEBT_KINDS.find((k) => k.key === "credit").dsr;
+  const autoSpec = DEBT_KINDS.find((k) => k.key === "auto").dsr;
+  if (minusSpec.method !== creditSpec.method || minusSpec.years !== creditSpec.years) fail("마이너스", "신용과 다른 dsr");
+  else if (Math.abs(annual("minus", 1000) - creditLike) > 1e-9) fail("마이너스", String(annual("minus", 1000)));
+  else if (Math.abs(annual("credit", 1000) - creditLike) > 1e-9) fail("신용", String(annual("credit", 1000)));
+  else if (Math.abs(annual("jeonse", 1000) - interest) > 1e-9) fail("전세 이자", String(annual("jeonse", 1000)));
+  else ok("마이너스통장은 신용과 같다. 이자는 실제 금리 + 스트레스 금리 (1,000만 → 270만)");
+  if (autoSpec.method !== "principal" || autoSpec.years !== 3) fail("자동차", JSON.stringify(autoSpec));
+  else if (Math.abs(annual("auto", 3000) - 1000) > 1e-9) fail("자동차", String(annual("auto", 3000)));
+  else ok("자동차는 원금 ÷ 3년 (3,000만 → 1,000만)");
 }
 
 try {

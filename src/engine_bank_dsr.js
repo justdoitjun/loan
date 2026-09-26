@@ -3,7 +3,7 @@
    종류를 더하려면 data.DEBT_KINDS에 dsr 파라미터를 붙인다.
    디딤돌 DTI는 이 파일을 부르지 않는다. 호출은 engine.limitParts의 은행 경로만.
    정본은 .claude/rules/products/bank/bank.md 3절. */
-import { DEBT_KINDS, RULE } from "./data.js";
+import { DEBT_KINDS, PRODUCTS, RULE } from "./data.js";
 
 const num = (v) => Math.max(Number(v) || 0, 0);
 
@@ -29,20 +29,25 @@ function kindAnnual(kind, amount) {
   }
   if (spec.method === "principal") {
     // 카드대출: 원금 ÷ 약정만기. 최장 3년이라 만기를 받기 전에는 years(3)로 나눈다.
-    // TODO: 약정만기가 3년보다 짧으면 그 만기로 나눈다. 이자는 이번 규칙에 없다.
+    // TODO: 카드 약정만기가 3년보다 짧으면 그 만기로 나눈다.
+    // 자동차: 원금 ÷ 3년.
     return amount / years;
   }
-  // principalPlusInterest, split: 원금 ÷ years + 이자.
-  // 신용은 5년, 비주택 담보는 8년. split은 이번 규칙에 없는 종류의 임시식.
+  // principalPlusInterest: 원금 ÷ years + 이자.
+  // 신용은 잔액 ÷ 5년. 마이너스통장은 그 식 그대로, 금액은 한도 전액. 비주택 담보는 8년.
   return amount / years + assumedInterest(amount, spec);
 }
 
-/* TODO: 실제 연간 이자 부담액으로 바꿀 것. 이자 자리를 받기 전에는 잔액 × 신용금리로 채운다. */
+/* 연간 이자상환액 = 잔액 × (실제 대출금리 + 신규 취급시점 스트레스 금리).
+   스트레스 금리는 실제 금리와 별개다. 화면 금리에는 더하지 않는다.
+   TODO: 실제 대출금리로 바꿀 것. 받기 전에는 RULE.creditRate로 자리를 채운다.
+   주담대(actual)·카드·자동차는 이 함수를 타지 않는다. */
 function assumedInterest(amount, spec) {
-  const rate = spec.rate == null ? RULE.creditRate : num(spec.rate);
-  return amount * rate;
+  const actual = spec.rate == null ? RULE.creditRate : num(spec.rate);
+  const stress = spec.stressRate == null ? num(PRODUCTS.bank.stressRate) : num(spec.stressRate);
+  return amount * (actual + stress);
 }
 
 function principalPlusInterest(amount, years) {
-  return amount / years + amount * RULE.creditRate;
+  return amount / years + assumedInterest(amount, {});
 }

@@ -189,14 +189,17 @@ export function limitParts(p, price, income, debt = null, capOverride = null) {
   const balance = combinedDebtBalance(debt);
 
   /* 디딤돌: DTI(합계 × 이자). 이자만 보는 상품: 합계 × 금리.
-     은행 DSR: 종류별 연 상환액. 스트레스 금리는 아래 본건 금리에만 더한다. */
+     은행 DSR: 종류별 연 상환액. 기존 부채의 이자는 engine_bank_dsr가
+     실제 금리 + 스트레스 금리로 만든다. 본건 원리금균등도 아래 합산 금리를 쓴다. */
   const fund = p.capacityModel === "fundDTI";
   const existingAnnual = fund
     ? otherDebtInterest(balance)
     : debt?.view === "interestOnly"
       ? annualDebtService(balance, "interestOnly")
       : bankExistingAnnual(debt);
-  /* 은행 DSR: 본건 환산금리 = 가정금리 + 스트레스 가산(stressRate, 없으면 0). 산정만기는 상품 데이터(years), 없으면 30년. */
+  /* 은행 DSR: 본건 원리금균등 금리 = 실제 금리(calcRate) + 신규 취급시점 스트레스 금리.
+     stressRate가 없으면 실제 금리만. 산정만기는 상품 데이터(years), 없으면 30년.
+     화면 금리(rateLabel)와는 별개다. */
   const capacity = fund
     ? didimdolDtiLimit(income, balance)   // 금리·만기·DTI상한은 data.js의 디딤돌 파라미터가 정한다
     : repaymentCapacity(income, p.ratio, p.calcRate + (p.stressRate ?? 0), p.years ?? 30, existingAnnual);
