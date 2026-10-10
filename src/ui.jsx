@@ -3,6 +3,7 @@
    상품 차이는 src/products/* 와 data.js에만 둔다. */
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { C } from "./data.js";
+import { bindFitLines } from "./fitLines.js";
 
 /* ── 스타일 토큰 ── */
 export const eyebrow = { fontSize: 12, letterSpacing: 2, color: C.greenDeep, fontWeight: 700 };
@@ -66,7 +67,7 @@ export const css = `
   @keyframes sheetpane{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
   .place-gus{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
   .place-gu,.place-dong,.place-find,.place-find-clear,.sheet-x,.sheet-back,.path-btn{font-family:inherit;-webkit-tap-highlight-color:transparent;box-sizing:border-box;}
-  .place-gu{min-height:48px;padding:8px 4px;border-radius:12px;border:1.5px solid ${C.line};background:#fff;color:${C.ink};font-size:14px;font-weight:700;text-align:center;cursor:pointer;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;}
+  .place-gu{min-width:0;min-height:48px;padding:8px 4px;border-radius:12px;border:1.5px solid ${C.line};background:#fff;color:${C.ink};font-size:14px;font-weight:700;text-align:center;cursor:pointer;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;}
   .place-count{font-size:11px;font-weight:700;color:${C.inkSoft};font-variant-numeric:tabular-nums;line-height:1;}
   .place-gu[aria-current="true"] .place-count,.place-dong[aria-current="true"] .place-count{color:${C.greenDeep};}
   .place-dong{width:100%;min-height:48px;margin:0 0 6px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;border-radius:12px;border:1.5px solid ${C.line};background:#fff;color:${C.ink};font-size:15px;font-weight:600;cursor:pointer;}
@@ -78,10 +79,10 @@ export const css = `
   .place-find:focus{outline:none;border-color:${C.greenDeep};background:#fff;}
   .place-find-clear{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:32px;height:32px;border:none;border-radius:50%;background:transparent;color:${C.inkSoft};font-size:18px;line-height:1;cursor:pointer;}
   .place-empty{margin:14px 2px 0;font-size:14px;color:${C.inkSoft};line-height:1.5;}
-  .path{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;max-width:70%;font-size:12px;line-height:1.35;color:${C.inkSoft};font-weight:600;}
+  .path{display:flex;flex-wrap:nowrap;justify-content:flex-end;align-items:center;max-width:70%;min-width:0;overflow:hidden;font-size:12px;line-height:1.35;color:${C.inkSoft};font-weight:600;}
   .path-city{padding:8px 0;}
   .path-sep{color:${C.faint};margin:0 5px;}
-  .path-btn{display:inline-flex;align-items:center;border:none;background:none;padding:10px 3px;margin:-6px 0;min-height:40px;font-size:12px;font-weight:700;color:${C.greenDeep};cursor:pointer;}
+  .path-btn{display:inline-flex;align-items:center;min-width:0;border:none;background:none;padding:10px 3px;margin:-6px 0;min-height:40px;font-size:12px;font-weight:700;color:${C.greenDeep};cursor:pointer;}
   .path-caret{width:0;height:0;margin-left:4px;border-left:3px solid transparent;border-right:3px solid transparent;border-top:4px solid currentColor;opacity:.75;}
   @media (hover:hover){
     .place-gu:hover,.place-dong:hover{background:${C.softer};border-color:${C.lineStrong};}
@@ -105,6 +106,11 @@ export const css = `
   .stripe-off{background:repeating-linear-gradient(-45deg,#E8E4DC,#E8E4DC 6px,#F4F1EA 6px,#F4F1EA 12px);}
   .gauge-fill{transition:width .38s ease;}
 
+  /* 칸이 좁으면 글자 최소 너비가 화면을 밀지 않게 한다. 줄이 넘치면 fitLines 가 글자를 줄인다.
+     :where 는 구체성을 0으로 둬서, 버튼·시트처럼 최소 너비를 명시한 규칙은 그대로 둔다. */
+  :where(.app-root, .app-root *){min-width:0;}
+  [data-fit-relax]{min-width:0 !important;flex-shrink:1 !important;}
+
   @media (prefers-reduced-motion: reduce){
     .dot,.slideup,.modal,.sheet-pane{animation:none;}
     .dot,.acc{transition:none;}
@@ -113,10 +119,12 @@ export const css = `
 
 /* ── 레이아웃 ── */
 export function AppShell({ children }) {
+  const rootRef = useRef(null);
+  useLayoutEffect(() => bindFitLines(rootRef.current), []);
   return (
-    <div style={{ minHeight: "100dvh", background: C.bg, color: C.ink, fontFamily: '"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif' }}>
+    <div ref={rootRef} className="app-root" style={{ minHeight: "100dvh", background: C.bg, color: C.ink, fontFamily: '"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif' }}>
       <style>{css}</style>
-      <div style={{ maxWidth: 460, margin: "0 auto", padding: "max(22px, env(safe-area-inset-top)) 18px max(40px, env(safe-area-inset-bottom))" }}>{children}</div>
+      <div className="shell" style={{ width: "100%", maxWidth: 460, margin: "0 auto", padding: "max(16px, env(safe-area-inset-top)) clamp(12px, 4.2vw, 18px) max(28px, env(safe-area-inset-bottom))" }}>{children}</div>
     </div>
   );
 }
@@ -127,7 +135,7 @@ export function BackButton({ onClick, children }) {
 
 /* ── 조각들 ── */
 export function Stat({ label, value, warn, color }) {
-  return <div><div style={{ fontSize: 11, color: C.inkSoft }}>{label}</div><div style={{ fontSize: 15, fontWeight: 800, color: color || (warn ? C.amber : C.ink), fontVariantNumeric: "tabular-nums" }}>{value}</div></div>;
+  return <div style={{ maxWidth: "100%" }}><div style={{ fontSize: 11, color: C.inkSoft }}>{label}</div><div style={{ fontSize: 15, fontWeight: 800, color: color || (warn ? C.amber : C.ink), fontVariantNumeric: "tabular-nums" }}>{value}</div></div>;
 }
 
 export function rangeFill(value, min, max) {

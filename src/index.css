@@ -23,12 +23,18 @@ a:hover {
 }
 
 /* display:flex + place-items:center 를 두면 #root가 flex 아이템이 되어
-   너비·높이가 shrink-to-fit이 된다. Mortgage.jsx의 maxWidth:460 / margin:0 auto 가
-   죽고, 화면 폭이 "현재 화면에서 가장 긴 텍스트" 길이로 정해져서
-   단계를 넘어갈수록(텍스트가 짧아질수록) 화면이 계속 작아진다. */
+   너비·높이가 shrink-to-fit이 된다. 화면 폭이 "현재 화면에서 가장 긴 텍스트"
+   길이로 정해져서, 단계를 넘어갈수록 화면이 계속 작아진다.
+   글자가 칸을 넘치면 줄을 내리지 않고 글자 크기를 줄인다(src/fitLines.js). */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
-  min-width: 320px;
+  min-width: 0;
   min-height: 100vh;
 }
 
