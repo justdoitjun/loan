@@ -1,6 +1,6 @@
 import { useState, useMemo, useLayoutEffect, useRef, useId } from "react";
 import { DATA, CITY, GUS, DONGS, RULE, C } from "./data.js";
-import { evaluate, repaymentCapacity, buildCtx, won } from "./engine.js";
+import { evaluate, repaymentCapacity, buildCtx, won, eok } from "./engine.js";
 import { AppShell, Slider, eyebrow, h1, ghostBtn, listItem, modalOpt, fine, BottomSheet, useOverlayLock } from "./ui.jsx";
 import { EMPTY_PERSON, personReady } from "./person.js";
 import { judgeUnits } from "./verdict.js";
@@ -79,7 +79,7 @@ export default function App() {
       {step === "budget" && (
         <>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-            <div style={eyebrow}>그린라이트</div>
+            <div style={eyebrow}>내집마련</div>
             <PlacePath place={place} sheet={sheet} onGu={() => setSheet("gu")} onDong={() => setSheet("dong")} />
           </div>
           <h1 style={h1}>내 소득으로<br />가능한 집은 얼마일까요?</h1>
@@ -87,12 +87,12 @@ export default function App() {
             <Slider label="나의 연소득" value={income} min={0} max={12000} step={100} onChange={(v) => patch("ownIncome", v)} display={won(income) + "원"} />
           </div>
 
-          <button onClick={() => setStep("incomeCheck")} style={{ ...ghostBtn, width: "100%", marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          {/* <button onClick={() => setStep("incomeCheck")} style={{ ...ghostBtn, width: "100%", marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>내 소득, 그대로 인정될지 미리 확인해볼까요?</span>
             <span style={{ fontSize: 12, fontWeight: 800, color: incomeTrustResult ? (incomeTrustResult.tone === "green" ? C.greenDeep : C.amber) : C.inkSoft }}>
               {incomeTrustResult ? (incomeTrustResult.tone === "green" ? "확인함 · 초록" : "확인함 · 노랑") : "확인 안 함 →"}
             </span>
-          </button>
+          </button> */}
 
           {/* {precise && <PreciseNote />} */}
 
@@ -104,15 +104,15 @@ export default function App() {
             <button key={r.id} onClick={() => setModalUnit(r)} style={listItem}>
               <div>
                 <div style={{ fontSize: 15, color: C.ink, fontWeight: 700 }}>{r.name}</div>
-                <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 2 }}>{r.dong} · 전용 {r.areaM2}㎡ · 평균시세 {won(r.price)}원</div>
-                <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 3 }}>추가로 필요한 현금 {won(r.cashNeeded)}원</div>
+                <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 2 }}>전용 {r.areaM2}㎡ · 시세 {eok(r.price)}</div>
+                <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 3 }}>자본금 {won(r.cashNeeded)}원</div>
               </div>
               <span style={{ fontSize: 15, color: C.greenDeep, fontWeight: 800, textAlign: "right", flex: "0 0 auto" }}>
                 대출 {won(r.loan)} ›
               </span>
             </button>
           ))}
-          <p style={fine}>상담역이 확정해요. 대출을 약속하지 않아요.</p>
+          <p style={fine}>대략적인 전략을 짜면, 전문가가 확인해드려요.</p>
         </>
       )}
 
@@ -130,7 +130,7 @@ export default function App() {
 
       {step === "strategy" && ctx && (
         <Strategy
-          ctx={ctx} person={person} pickedKey={pickedKey} onPickOther={setPickedKey}
+          ctx={ctx} person={person} pickedKey={pickedKey}
           detail={person.detail} setDetail={setDetail}
           pull={person.pull} setPull={setPull}
           onSwapUnit={swapUnit}
@@ -285,11 +285,11 @@ function ProductModal({ r, onPick, onClose }) {
   const titleId = useId();
   useOverlayLock(onClose, panelRef);
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(20,30,26,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 18 }}>
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(32,28,22,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 18 }}>
       <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={(e) => e.stopPropagation()} className="modal" style={{ width: "100%", maxWidth: 420, maxHeight: "min(90dvh, 720px)", overflowY: "auto", background: "#fff", color: C.ink, colorScheme: "light", borderRadius: 20, padding: "20px 20px 22px", outline: "none" }}>
         <div id={titleId} style={{ fontSize: 18, fontWeight: 800 }}>{r.name}</div>
         <div style={{ fontSize: 13, color: C.inkSoft }}>{r.dong} · 전용 {r.areaM2}㎡ · {won(r.price)}원</div>
-        <div style={{ margin: "12px 0 4px", padding: "10px 12px", borderRadius: 12, background: "#F7FAF7", border: `1px solid ${C.line}` }}>
+        <div style={{ margin: "12px 0 4px", padding: "10px 12px", borderRadius: 12, background: C.softer, border: `1px solid ${C.line}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "2px 0" }}>
             <span style={{ color: C.inkSoft }}>가능한 대출</span>
             <span style={{ fontWeight: 800, color: C.greenDeep, fontVariantNumeric: "tabular-nums" }}>약 {won(r.loan)}원</span>
@@ -317,7 +317,7 @@ function ProductModal({ r, onPick, onClose }) {
 /* 대략 천장 → 매물별 정밀 판정으로 넘어갔다는 걸 숨기지 않는다. */
 function PreciseNote() {
   return (
-    <div className="slideup" style={{ marginTop: 10, padding: "9px 12px", borderRadius: 10, background: "#F7FAF7", border: `1px solid ${C.line}`, fontSize: 12, color: C.inkSoft, lineHeight: 1.6 }}>
+    <div className="slideup" style={{ marginTop: 10, padding: "9px 12px", borderRadius: 10, background: C.softer, border: `1px solid ${C.line}`, fontSize: 12, color: C.inkSoft, lineHeight: 1.6 }}>
       <b style={{ color: C.greenDeep }}>자격 답변을 반영해서 다시 계산했어요.</b>
     </div>
   );

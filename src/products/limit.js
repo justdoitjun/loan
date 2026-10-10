@@ -4,12 +4,13 @@
    — 디딤돌은 DTI, 은행 계열은 DSR로 갈린다.
 
    레버 값(lever)의 모양 — 이게 이 인터페이스의 계약이다:
-     { price, income, incomeMax, debt, debts }
+     { price, income, incomeMax, debt, debts, offsetRoom }
        price      담보 시세 (만원)             · 고정
        income     가정 인정소득 (만원)          · 소득 레버
        incomeMax  소득 레버가 갈 수 있는 최대     · 천장 계산에 씀
        debt       종류별 금액의 합계 (만원)      · debts와 같다. 합계만 보는 호출용
        debts      { [DEBT_KINDS.key]: 금액 }   · 종류별. 없으면 debt 숫자를 쓴다
+       offsetRoom 방공제 상쇄 여부              · null = 상품 기본값. true면 안 빼고, false면 뺀다
    월상환액은 묻지도 넘기지도 않는다.
    은행의 종류별 연 상환액은 engine_bank_dsr.js가 잔액을 해석한다. 여기선 raw 부채를 넘긴다.
    돌려주는 것: { limit, parts, binding } — limitParts와 같은 모양. */
@@ -29,7 +30,7 @@ const viewOf = (key) => DEBT_VIEW[key] ?? "principalAndInterest";
    debts가 없으면 debt 숫자 하나를 쓴다. */
 export function limitAt(productKey, lever, capOverride = null) {
   const debt = { balance: lever.debt ?? 0, debts: lever.debts ?? null, view: viewOf(productKey) };
-  return limitParts(PRODUCTS[productKey], lever.price, lever.income, debt, capOverride);
+  return limitParts(PRODUCTS[productKey], lever.price, lever.income, debt, capOverride, lever.offsetRoom);
 }
 
 /* 두 레버를 끝까지 당겼을 때(부채 0 · 소득 상한) = '정직한 천장'.

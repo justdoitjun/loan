@@ -169,7 +169,7 @@ export default function IncomeCheck({ value, onChange, onBack }) {
         </div>
       )}
 
-      <p style={fine}>상담역이 확정해요. 대출을 약속하지 않아요.</p>
+      <p style={fine}>대략적인 전략을 짜면, 전문가가 확인해드려요.</p>
     </div>
   );
 }
@@ -204,7 +204,7 @@ function Result({ result, showDetail, setShowDetail }) {
         {showDetail ? "산정 기준 원문 접기" : "산정 기준 원문 보기(상담역용)"}
       </button>
       {showDetail && (
-        <div className="slideup" style={{ marginTop: 10, padding: "12px 13px", borderRadius: 12, background: "#F7FAF7", border: `1px dashed ${C.line}`, fontSize: 12, color: C.inkSoft, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+        <div className="slideup" style={{ marginTop: 10, padding: "12px 13px", borderRadius: 12, background: C.softer, border: `1px dashed ${C.line}`, fontSize: 12, color: C.inkSoft, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
           {type.incomeCalcMethod}
         </div>
       )}

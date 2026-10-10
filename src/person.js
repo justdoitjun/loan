@@ -180,8 +180,9 @@ export const EMPTY_PERSON = {
         본인은 소득 화면 슬라이더, 배우자는 자격 화면 밴드. 합치는 건 engine.buildCtx의 일이다. */
   elig: EMPTY_ELIG,
   detail: { ...EMPTY_DETAIL, debts: emptyDebts() },
-  /* 레버를 당긴 값 { debts, income } · null = 아직 한 번도 안 당김(유도 애니메이션 신호).
+  /* 레버를 당긴 값 { debts, income, offsetRoom } · null = 아직 한 번도 안 당김(유도 애니메이션 신호).
      debts는 종류별 '줄인 뒤 금액'. 없는 키는 확정값 그대로다. 합계는 여기 두지 않는다.
+     offsetRoom은 방공제 상쇄. 없으면 상품 기본값이다.
      시작 위치(detail)와 당긴 값(pull)을 따로 두는 이유: "얼마나 움직였나"를
      둘의 차이로 계산하기 때문. 하나로 합치면 '원래 얼마였는지'가 사라진다. */
   pull: null,
@@ -197,7 +198,7 @@ export const personReady = (person) => eligReady(person.elig) || bankReady(perso
 export const totalIncomeOf = (person) => person.ownIncome + spouseIncomeOf(person.elig);
 
 /* ── 사람 상태 → 레버 값 ──
-   products/limit.js가 요구하는 계약 { price, income, incomeMax, debt, debts }를 만든다.
+   products/limit.js가 요구하는 계약 { price, income, incomeMax, debt, debts, offsetRoom }를 만든다.
    가격만 매물에서 오고 나머지는 전부 사람에게서 온다 — 이 함수가 그 경계다.
 
    incomeCap = 이 상품의 소득상한(만원). 넘기면 소득 레버가 거기서 잘린다 —
@@ -227,5 +228,7 @@ export function leverOf(person, price, incomeCap = null, pulled = true) {
     incomeMax,
     debts,
     debt: debtTotal(debts),
+    /* null = 상품이 정한 방공제. true/false는 전략 화면에서 켠 값만. */
+    offsetRoom: pull && typeof pull.offsetRoom === "boolean" ? pull.offsetRoom : null,
   };
 }

@@ -49,7 +49,7 @@ export default function DetailInfo({ value, onChange }) {
     <Section title="① 기존보유대출">
       <style>{DEBT_CSS}</style>
       {confirmed ? (
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "12px 14px", borderRadius: 12, background: "#F7FAF7", border: `1px solid ${C.line}` }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "12px 14px", borderRadius: 12, background: C.softer, border: `1px solid ${C.line}` }}>
           <div style={{ flex: "1 1 auto", minWidth: 0 }}>
             <div style={{ fontSize: 12, color: C.inkSoft, marginBottom: 6 }}>확정한 대출</div>
             {filled.length === 0 ? (
@@ -213,36 +213,36 @@ function appendDigits(prev, chunk, ceiling) {
 
 const DEBT_CSS = `
   .debt-row,.debt-chip,.kp-key,.kp-go{font-family:inherit;-webkit-tap-highlight-color:transparent;touch-action:manipulation;box-sizing:border-box;}
-  .debt-row{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:52px;margin:0 0 8px;padding:12px 14px;border-radius:14px;border:1.5px solid #E4E9E4;background:#fff;cursor:pointer;text-align:left;}
-  .debt-row[data-on="true"]{border-color:#14705A;background:#F3F9F5;}
-  .debt-row:active{background:#F7FAF7;}
-  .debt-name{flex:1 1 auto;min-width:0;font-size:14px;font-weight:700;color:#1E2A24;line-height:1.35;}
+  .debt-row{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:52px;margin:0 0 8px;padding:12px 14px;border-radius:14px;border:1.5px solid ${C.line};background:#fff;cursor:pointer;text-align:left;}
+  .debt-row[data-on="true"]{border-color:${C.greenDeep};background:${C.soft};}
+  .debt-row:active{background:${C.softer};}
+  .debt-name{flex:1 1 auto;min-width:0;font-size:14px;font-weight:700;color:${C.ink};line-height:1.35;}
   .debt-side{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
-  .debt-amt{font-size:15px;font-weight:800;color:#9AA3A0;font-variant-numeric:tabular-nums;}
-  .debt-row[data-on="true"] .debt-amt{color:#14705A;}
-  .debt-edit{font-size:12px;font-weight:800;color:#14705A;}
+  .debt-amt{font-size:15px;font-weight:800;color:${C.faint};font-variant-numeric:tabular-nums;}
+  .debt-row[data-on="true"] .debt-amt{color:${C.greenDeep};}
+  .debt-edit{font-size:12px;font-weight:800;color:${C.greenDeep};}
   .kp-fit{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;}
   .debt-chips{display:flex;gap:6px;margin:0 0 8px;flex:0 0 auto;}
-  .debt-chip{flex:1 1 0;min-width:0;min-height:36px;padding:8px 2px;border-radius:11px;border:1.5px solid #E4E9E4;background:#fff;color:#1E2A24;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;}
-  .debt-chip[data-on="true"]{border-color:#14705A;background:#E8F4EF;color:#14705A;}
-  .debt-chip:active{background:#E7F0EA;}
+  .debt-chip{flex:1 1 0;min-width:0;min-height:36px;padding:8px 2px;border-radius:11px;border:1.5px solid ${C.line};background:#fff;color:${C.ink};font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;}
+  .debt-chip[data-on="true"]{border-color:${C.green};background:${C.green};color:${C.onAccent};}
+  .debt-chip:active{background:#F3E7B4;}
   .kp-amt{flex:0 0 auto;padding:2px 2px 8px;text-align:center;}
-  .kp-figure{font-size:32px;font-weight:800;letter-spacing:-.04em;line-height:1.1;font-variant-numeric:tabular-nums;color:#1E2A24;}
-  .kp-figure[data-zero="true"]{color:#C5CDC8;}
-  .kp-hint{margin-top:2px;min-height:1.25em;font-size:13px;font-weight:700;color:#14705A;}
-  .kp-hint.soft{color:#5B6660;}
+  .kp-figure{font-size:32px;font-weight:800;letter-spacing:-.04em;line-height:1.1;font-variant-numeric:tabular-nums;color:${C.ink};}
+  .kp-figure[data-zero="true"]{color:${C.greyDot};}
+  .kp-hint{margin-top:2px;min-height:1.25em;font-size:13px;font-weight:700;color:${C.greenDeep};}
+  .kp-hint.soft{color:${C.inkSoft};}
   .kp-grid{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(4,minmax(0,1fr));gap:6px;}
-  .kp-key{container-type:size;height:auto;min-height:0;padding:0;display:flex;align-items:center;justify-content:center;border:none;border-radius:14px;background:#F4F6F3;color:#1E2A24;font-size:22px;font-weight:700;line-height:1;cursor:pointer;font-variant-numeric:tabular-nums;}
-  .kp-key.fn{font-size:16px;font-weight:800;color:#5B6660;}
+  .kp-key{container-type:size;height:auto;min-height:0;padding:0;display:flex;align-items:center;justify-content:center;border:none;border-radius:14px;background:${C.bg};color:${C.ink};font-size:22px;font-weight:700;line-height:1;cursor:pointer;font-variant-numeric:tabular-nums;}
+  .kp-key.fn{font-size:16px;font-weight:800;color:${C.inkSoft};}
   .kp-glyph{font-size:22px;font-weight:inherit;line-height:1;color:inherit;}
   .kp-key.fn .kp-glyph{font-size:16px;}
   @supports (font-size:1cqmin){
     .kp-glyph{font-size:clamp(16px,42cqmin,28px);}
     .kp-key.fn .kp-glyph{font-size:clamp(13px,30cqmin,20px);}
   }
-  .kp-key:active{background:#E4EDE7;}
-  .kp-go{flex:0 0 auto;width:100%;margin-top:8px;height:46px;border:none;border-radius:14px;background:#14705A;color:#fff;font-size:16px;font-weight:800;cursor:pointer;}
-  .kp-go:active{background:#0E5343;}
+  .kp-key:active{background:#EBE4D6;}
+  .kp-go{flex:0 0 auto;width:100%;margin-top:8px;height:46px;border:none;border-radius:14px;background:${C.green};color:${C.onAccent};font-size:16px;font-weight:800;cursor:pointer;}
+  .kp-go:active{background:${C.press};}
   .kp-go:focus,.kp-key:focus,.debt-row:focus,.debt-chip:focus{outline:none;}
-  .kp-go:focus-visible,.kp-key:focus-visible,.debt-row:focus-visible,.debt-chip:focus-visible{outline:3px solid #14705A;outline-offset:2px;}
+  .kp-go:focus-visible,.kp-key:focus-visible,.debt-row:focus-visible,.debt-chip:focus-visible{outline:3px solid ${C.greenDeep};outline-offset:2px;}
 `;

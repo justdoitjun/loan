@@ -124,7 +124,7 @@ export default function Gov({ ctx, elig, setElig, onPick }) {
                 ? <>
                     <SpouseIncomeTrack value={elig.spouseBand} onPick={pickBand} ownIncome={ownIncome} planned={elig.marital === "planned"} />
                     {showPrecise && (
-                      <div className="slideup" style={{ marginBottom: 14, padding: "12px 14px", borderRadius: 12, background: "#F7FAF7", border: `1px solid ${C.line}` }}>
+                      <div className="slideup" style={{ marginBottom: 14, padding: "12px 14px", borderRadius: 12, background: C.softer, border: `1px solid ${C.line}` }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: C.greenDeep, marginBottom: 4 }}>소득상한 경계</div>
                         <div style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.55, marginBottom: 8 }}>정확한 금액을 넣으면 더 좁혀요.</div>
                         <input type="number" inputMode="numeric" placeholder="예: 4000" value={elig.spouseIncomeRaw} onChange={(e) => set("spouseIncomeRaw", e.target.value)} style={inputBox} />
@@ -157,7 +157,7 @@ export default function Gov({ ctx, elig, setElig, onPick }) {
             <Placeholder>위를 채우면 계산해요.</Placeholder>
           </Section>)}
 
-      <p style={fine}>상담역이 확정해요. 대출을 약속하지 않아요.</p>
+      <p style={fine}>대략적인 전략을 짜면, 전문가가 확인해드려요.</p>
     </>
   );
 }
@@ -197,7 +197,7 @@ function FamilyCard({ elig, set, setHasSpouse, facts, ready }) {
       </div>
       {elig.hasSpouse === true && (
         <div className="slideup" style={{ marginTop: 8 }}>
-          <div style={{ fontSize: 12, color: "#9AA3A0", marginBottom: 4 }}>배우자 생년월일 (몰라도 넘어갈 수 있어요)</div>
+          <div style={{ fontSize: 12, color: C.faint, marginBottom: 4 }}>배우자 생년월일 (몰라도 넘어갈 수 있어요)</div>
           <BirthdateInput value={elig.spouseBirthday} onChange={(v) => set("spouseBirthday", v)} />
         </div>
       )}
@@ -209,7 +209,7 @@ function FamilyCard({ elig, set, setHasSpouse, facts, ready }) {
         <button onClick={addChild} style={{ padding: "6px 12px", borderRadius: 9, border: `1.5px solid ${C.line}`, background: "#fff", color: C.greenDeep, fontSize: 12, fontWeight: 800, cursor: "pointer" }}>+ 자녀 추가</button>
       </div>
       {kids.length === 0
-        ? <div style={{ fontSize: 12, color: "#9AA3A0", lineHeight: 1.55 }}>없으면 그대로 두세요. 미성년 자녀 수와 신생아 여부로 상한이 달라져서 여쭤봐요.</div>
+        ? <div style={{ fontSize: 12, color: C.faint, lineHeight: 1.55 }}>없으면 그대로 두세요. 미성년 자녀 수와 신생아 여부로 상한이 달라져서 여쭤봐요.</div>
         : <div style={{ display: "grid", gap: 8 }}>
             {kids.map((d, i) => {
               const a = filledAge(d);
@@ -217,7 +217,7 @@ function FamilyCard({ elig, set, setHasSpouse, facts, ready }) {
                 <div key={i}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
                     <span style={{ fontSize: 12, color: C.inkSoft }}>{i + 1}번째 아이 생년월일{a !== null ? ` · 만 ${a}세` : ""}</span>
-                    <button onClick={() => removeChild(i)} style={{ border: "none", background: "none", color: "#9AA3A0", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0 }}>삭제</button>
+                    <button onClick={() => removeChild(i)} style={{ border: "none", background: "none", color: C.faint, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0 }}>삭제</button>
                   </div>
                   <BirthdateInput value={d} onChange={(v) => setChild(i, v)} />
                 </div>
@@ -262,12 +262,12 @@ function BirthdateInput({ value, onChange }) {
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       <input ref={yRef} aria-label="태어난 연도" inputMode="numeric" placeholder="년" maxLength={4} value={y} style={seg(72)}
         onChange={(e) => { const v = onlyDigits(e.target.value).slice(0, 4); commit(v, m, d); if (v.length === 4) mRef.current?.focus(); }} />
-      <span style={{ color: "#9AA3A0" }}>-</span>
+      <span style={{ color: C.faint }}>-</span>
       <input ref={mRef} aria-label="태어난 월" inputMode="numeric" placeholder="월" maxLength={2} value={m} style={seg(48)}
         onChange={(e) => { const v = onlyDigits(e.target.value).slice(0, 2); commit(y, clampSeg(v, 1, 12), d); if (v.length === 2) dRef.current?.focus(); }}
         onBlur={() => m.length === 1 && commit(y, pad2(m), d)}
         onKeyDown={(e) => { if (e.key === "Backspace" && m === "") yRef.current?.focus(); }} />
-      <span style={{ color: "#9AA3A0" }}>-</span>
+      <span style={{ color: C.faint }}>-</span>
       <input ref={dRef} aria-label="태어난 일" inputMode="numeric" placeholder="일" maxLength={2} value={d} style={seg(48)}
         onChange={(e) => { const v = onlyDigits(e.target.value).slice(0, 2); commit(y, m, clampSeg(v, 1, daysInMonth(y, m))); }}
         onBlur={() => d.length === 1 && commit(y, m, pad2(d))}
@@ -355,7 +355,7 @@ function ProductCard({ p, ctx, best, onPick }) {
   const cash = cashNeededOf(ctx.unit.price, p.rough);
   return (
     <button onClick={() => onPick(p.key)}
-      style={{ width: "100%", textAlign: "left", marginBottom: 10, padding: "13px 15px", borderRadius: 13, cursor: "pointer", border: `1.5px solid ${best ? C.greenDeep : C.line}`, background: best ? "#F3F9F5" : "#fff" }}>
+      style={{ width: "100%", textAlign: "left", marginBottom: 10, padding: "13px 15px", borderRadius: 13, cursor: "pointer", border: `1.5px solid ${best ? C.greenDeep : C.line}`, background: best ? C.soft : "#fff" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
         <span style={{ fontSize: 15, fontWeight: 800, color: C.inkSoft }}>
           {p.title}{best && <span style={{ fontSize: 11, color: C.greenDeep, marginLeft: 6 }}>한도 최대</span>}
@@ -368,7 +368,7 @@ function ProductCard({ p, ctx, best, onPick }) {
       <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 4, lineHeight: 1.6 }}>
         금리 {p.rateLabel} · 실행 {p.leadTime} · 최대 {won(p.limit)}
       </div>
-      {p.note && <div style={{ fontSize: 12, color: "#9AA3A0", marginTop: 4, lineHeight: 1.6 }}>{p.note}</div>}
+      {p.note && <div style={{ fontSize: 12, color: C.faint, marginTop: 4, lineHeight: 1.6 }}>{p.note}</div>}
       <div style={{ fontSize: 12, color: C.greenDeep, fontWeight: 800, marginTop: 7 }}>이걸로 볼게요 →</div>
     </button>
   );
@@ -397,7 +397,7 @@ function NoneCard({ others, ctx }) {
           ))}
         </div>
       )}
-      <div style={{ fontSize: 12, color: "#9AA3A0", marginTop: 8 }}>
+      <div style={{ fontSize: 12, color: C.faint, marginTop: 8 }}>
         합산소득 {won(ctx.totalIncome)}원 · 시세 {won(ctx.unit.price)}원 · 전용 {ctx.unit.areaM2}㎡
       </div>
     </Section>

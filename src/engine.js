@@ -73,6 +73,17 @@ const annuityFactor = (annualRate, years) => {
 export const annualPayment = (principal, annualRate, years) =>
   (num(principal) / annuityFactor(annualRate, years)) * 12;
 
+/* 화면용 월 원리금. 원리금균등, 만기 30년.
+   한도를 깎을 때만 더하는 스트레스 금리는 넣지 않는다. 옆에 적힌 금리와 같은 금리로 계산한다.
+   디딤돌은 calcRate가 없고, 그 금리는 DIDIMDOL_LOAN_RATE 한 곳이다. */
+export function monthlyInstallment(product, principal) {
+  const fund = product?.capacityModel === "fundDTI";
+  const years = fund ? DIDIMDOL_DTI.years : (product?.years ?? RULE.loanYears);
+  const rate = fund ? DIDIMDOL_LOAN_RATE : product?.calcRate;
+  if (!rate || num(principal) <= 0) return 0;
+  return annualPayment(principal, rate, years) / 12;
+}
+
 /* 은행(DSR) 잣대 — 기존 부채를 '원리금 전체'로 보고 소득에서 뺀다.
    ⚠️ 디딤돌은 이 함수를 쓰지 않는다(디딤돌은 아래 didimdolDtiLimit). 두 식을 다시 합치지 말 것.
    지금 쓰는 곳: 소득 화면의 천장(App.jsx), 그리고 capacityModel이 fundDTI가 아닌 상품. */
@@ -184,8 +195,10 @@ export function evaluate(unit, dsrCap) {
    이자만 보는 상품(보금자리 임시)은 합계에 annualDebtService interestOnly를 쓴다.
    상환능력을 어떤 식으로 볼지는 상품 데이터(capacityModel · view)가 정한다.
    productKey로 분기하지 말 것. fundDTI = 디딤돌 DTI. 원리금 view = 은행 종류별 DSR. */
-export function limitParts(p, price, income, debt = null, capOverride = null) {
-  const ltv = Math.max(price * p.LTV - (p.offsetsRoomDeduction ? 0 : RULE.roomDeduction), 0);
+export function limitParts(p, price, income, debt = null, capOverride = null, offsetRoom = null) {
+  /* null = 상품 기본값. 전략 화면의 방공제 스위치만 true/false로 덮어쓴다. */
+  const offset = offsetRoom == null ? p.offsetsRoomDeduction : offsetRoom;
+  const ltv = Math.max(price * p.LTV - (offset ? 0 : RULE.roomDeduction), 0);
   const balance = combinedDebtBalance(debt);
 
   /* 디딤돌: DTI(합계 × 이자). 이자만 보는 상품: 합계 × 금리.
@@ -207,7 +220,7 @@ export function limitParts(p, price, income, debt = null, capOverride = null) {
   const cap = capOverride ?? p.cap;                              // null = 상품 자체 한도 없음
   const region = p.regionCapped ? regionCapOf(price) : null;     // null = 지역 제한 없음
   const parts = [
-    { key: "ltv", label: p.offsetsRoomDeduction ? "담보(LTV · 방공제 상쇄)" : "담보(LTV - 방공제)", value: ltv },
+    { key: "ltv", label: offset ? "담보(LTV · 방공제 상쇄)" : "담보(LTV - 방공제)", value: ltv },
     { key: "dti", label: fund ? "상환능력(DTI)" : `상환능력(DSR ${Math.round(p.ratio * 100)}%)`, value: capacity },
     cap != null && { key: "cap", label: "정책상 최대한도", value: cap },
     region != null && { key: "region", label: "지역별 주담대 한도", value: region },

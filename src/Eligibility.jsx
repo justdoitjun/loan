@@ -18,7 +18,7 @@ export default function Eligibility({ unit, ownIncome, kind, setKind, elig, setE
 
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         {TABS.map((t) => (
-          <button key={t.key} onClick={() => setKind(t.key)} style={{ flex: 1, padding: "12px", borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: "pointer", border: `1.5px solid ${kind === t.key ? C.greenDeep : C.line}`, background: kind === t.key ? C.greenDeep : "#fff", color: kind === t.key ? "#fff" : C.ink }}>{t.label}대출</button>
+          <button key={t.key} onClick={() => setKind(t.key)} style={{ flex: 1, padding: "12px", borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: "pointer", border: `1.5px solid ${kind === t.key ? C.green : C.line}`, background: kind === t.key ? C.green : "#fff", color: kind === t.key ? C.onAccent : C.ink }}>{t.label}대출</button>
         ))}
       </div>
 

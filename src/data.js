@@ -201,7 +201,17 @@ export const INCOME_EDGE_MARGIN = 1000;
 export const NO_HOME_EXCEPTION = `이런 경우는 주택 수에 합산되지 않아요. \n 오피스텔, 25평 미만 단독주택(수도권 제외) 등, 무주택 여부에 대해 알고 싶다면 클릭하세요.`;
 
 
-/* ── 화면 상수 ── */
-export const C = { bg: "#F4F6F3", panel: "#FFFFFF", ink: "#1E2A24", inkSoft: "#5B6660", line: "#E4E9E4", green: "#2E9E6B", greenDeep: "#14705A", amber: "#E0A23A", greyDot: "#CBD1CE" };
+/* ── 화면 상수 ──
+   브랜드는 KB 옐로. green = 면(#FFCC08). 그 위 글자는 onAccent.
+   흰 글자를 노란 면에 올리면 대비가 무너진다.
+   greenDeep = 흰 배경 위의 글자·테두리. #FFCC08을 작은 글자에 쓰면 안 보인다.
+   amber는 경고라 브랜드 노랑과 겹치지 않게 한 톤 주황으로 둔다. */
+export const C = {
+  bg: "#F7F6F3", panel: "#FFFFFF", ink: "#2C2824", inkSoft: "#6B645C", faint: "#9A938A",
+  line: "#E6E0D4", lineStrong: "#D9D3C6",
+  green: "#FFCC08", greenDeep: "#8A6200", onAccent: "#2C2824",
+  soft: "#FFF4C2", softer: "#FBF8F1", press: "#E6B400", track: "#EFEBE3",
+  amber: "#E08A1E", greyDot: "#C9C3B8",
+};
 export const DONG_LABELS = [{ name: "상계동", x: 28, y: 15 }, { name: "중계동", x: 66, y: 40 }, { name: "하계동", x: 60, y: 66 }];
 export const TABS = [{ key: "gov", label: "정부" }, { key: "bank", label: "은행" }];

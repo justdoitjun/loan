@@ -18,10 +18,10 @@ const REGION_NAME = REGION_LABEL[REGION];
 
 /* 주택 보유 상태 4버킷 = LTV 표의 행. key는 person.homeBucketOf가 돌려주는 값과 같다. */
 const HOME_BUCKETS = [
-  { key: "none",    label: "지금 가진 집이 없어요",              desc: "무주택 — LTV 70%로 봐요",                                    homeCount: 0, dispose: null },
-  { key: "dispose", label: "집이 하나 있는데, 처분할 거예요",     desc: "처분조건부 1주택 — 무주택과 같은 70%. 처분 약정은 상담역이 확인해요", homeCount: 1, dispose: true },
-  { key: "keep",    label: "집이 하나 있고, 계속 갖고 있을래요",   desc: `${REGION_NAME}에선 LTV 0% — 이 길은 닫혀요`,                   homeCount: 1, dispose: false },
-  { key: "multi",   label: "집이 둘 이상 있어요",                desc: `${REGION_NAME}에선 LTV 0% — 이 길은 닫혀요`,                   homeCount: 2, dispose: null },
+  { key: "none",    label: "없어요",              desc: "무주택 — LTV 70%로 봐요",                                    homeCount: 0, dispose: null },
+  { key: "dispose", label: "집이 하나 있지만, 처분할 거예요",     desc: "6개월 내 처분 및 전입조건", homeCount: 1, dispose: true },
+  { key: "keep",    label: "집이 하나 있고, 계속 갖고 있을래요",   desc: `${REGION_NAME}에선 LTV 0%`,                   homeCount: 1, dispose: false },
+  { key: "multi",   label: "집이 둘 이상 있어요",                desc: `${REGION_NAME}에선 LTV 0%`,                   homeCount: 2, dispose: null },
 ];
 
 /* 접힌 요약. 접어도 '무엇으로 판정했는지'는 남긴다(정부탭과 같은 원칙). */
@@ -54,8 +54,8 @@ export default function Bank({ ctx, elig, setElig, onPick }) {
     <>
       {!collapsed && (
         <>
-          <div style={eyebrow}>은행 주담대</div>
-          <h1 style={h1}>자격보다 담보와<br />상환능력을 봐요.</h1>
+          <div style={eyebrow}>은행 상품</div>
+          <h1 style={h1}>자격보다 상환능력을 봐요.</h1>
           <div style={{ borderTop: `1px solid ${C.line}`, margin: "6px 0 16px" }} />
         </>
       )}
@@ -100,7 +100,7 @@ export default function Bank({ ctx, elig, setElig, onPick }) {
             <Placeholder>소득 합산을 고르면 계산해요.</Placeholder>
           </Section>)}
 
-      <p style={fine}>상담역이 확정해요. 대출을 약속하지 않아요.</p>
+      <p style={fine}>대략적인 전략을 짜면, 전문가가 확인해드려요.</p>
     </>
   );
 }
@@ -133,8 +133,8 @@ function ClosedByLtv({ bucket, onPick }) {
     <Section title="은행 주담대가 닫혀요" tone="off">
       <div style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.7 }}>
         {bucket === "keep"
-          ? <>처분조건이면 열려요.</>
-          : <>한 채로 줄인 뒤 처분조건이면 열려요.</>}
+          ? <>처분조건으로 똘똘한 한 채를 갖는 건 어떠세요?</>
+          : <>주택 하나를 처분해야 평가 가능해요.</>}
       </div>
       {bucket === "keep" && (
         <button onClick={() => onPick(dispose)} style={{ marginTop: 10, border: "none", background: "none", padding: 0, color: C.greenDeep, fontSize: 13, fontWeight: 800, cursor: "pointer", textDecoration: "underline" }}>
@@ -166,19 +166,19 @@ function BankCard({ p, ctx, onPick }) {
   const b = p.roughBinding;
   return (
     <button onClick={() => onPick(p.key)}
-      style={{ width: "100%", textAlign: "left", marginBottom: 10, padding: "13px 15px", borderRadius: 13, cursor: "pointer", border: `1.5px solid ${C.greenDeep}`, background: "#F3F9F5" }}>
+      style={{ width: "100%", textAlign: "left", marginBottom: 10, padding: "13px 15px", borderRadius: 13, cursor: "pointer", border: `1.5px solid ${C.greenDeep}`, background: C.soft }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
         <span style={{ fontSize: 15, fontWeight: 800, color: C.inkSoft }}>{p.title}</span>
-        <span style={{ fontSize: 15, fontWeight: 800, color: C.greenDeep, fontVariantNumeric: "tabular-nums" }}>약 {eok(p.rough)}</span>
+        <span style={{ fontSize: 15, fontWeight: 800, color: C.greenDeep, fontVariantNumeric: "tabular-nums" }}>최소 대출 약 {eok(p.rough)}</span>
       </div>
       <div style={{ fontSize: 12, color: C.greenDeep, fontWeight: 700, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>
-        현금 약 {won(cashNeededOf(ctx.unit.price, p.rough))}원
+        자본금 {won(cashNeededOf(ctx.unit.price, p.rough))}원
       </div>
       <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 4, lineHeight: 1.6 }}>
         금리 {p.rateLabel} · 실행 {p.leadTime}
       </div>
       {/* Min의 세 항을 그대로 보여준다 — 은행에선 이 표가 곧 판정 근거다 */}
-      <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
+      {/* <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
         {p.roughParts.map((part) => {
           const on = part.key === b?.key;
           return (
@@ -188,9 +188,9 @@ function BankCard({ p, ctx, onPick }) {
             </div>
           );
         })}
-      </div>
-      {p.note && <div style={{ fontSize: 12, color: "#9AA3A0", marginTop: 4, lineHeight: 1.6 }}>{p.note}</div>}
-      <div style={{ fontSize: 12, color: C.greenDeep, fontWeight: 800, marginTop: 7 }}>이걸로 볼게요 →</div>
+      </div> */}
+      {/* {p.note && <div style={{ fontSize: 12, color: C.faint, marginTop: 4, lineHeight: 1.6 }}>{p.note}</div>} */}
+      <div style={{ fontSize: 12, color: C.greenDeep, fontWeight: 800, marginTop: 7 }}>전략을 짜드릴게요 →</div>
     </button>
   );
 }

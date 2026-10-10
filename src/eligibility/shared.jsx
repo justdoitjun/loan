@@ -39,13 +39,13 @@ export function SpouseIncomeTrack({ value, onPick, ownIncome, planned, desc }) {
             <button key={b.key} onClick={() => onPick(b.key)} aria-pressed={on}
               style={{ flex: 1, padding: "12px 4px", fontSize: 13, fontWeight: 700, cursor: "pointer", border: "none",
                 borderLeft: i > 0 ? `1px solid ${on || value === SPOUSE_INCOME_BANDS[i - 1].key ? "transparent" : C.line}` : "none",
-                background: on ? C.greenDeep : "#fff", color: on ? "#fff" : C.inkSoft, fontVariantNumeric: "tabular-nums" }}>
+                background: on ? C.green : "#fff", color: on ? C.onAccent : C.inkSoft, fontVariantNumeric: "tabular-nums" }}>
               {b.short}
             </button>
           );
         })}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#9AA3A0", marginTop: 5 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.faint, marginTop: 5 }}>
         <span>적음</span><span>많음</span>
       </div>
       {picked && (
@@ -86,5 +86,5 @@ export function AnswersDropdown({ open, onToggle, rows }) {
 
 /* 답에 따라 건너뛴 질문은 조용히 지우지 않고 "왜 안 물었는지"를 남긴다. */
 export function SkippedNote({ children }) {
-  return <div style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.6, marginBottom: 14, padding: "9px 12px", borderRadius: 10, background: "#F7FAF7", border: `1px dashed ${C.line}` }}>{children}</div>;
+  return <div style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.6, marginBottom: 14, padding: "9px 12px", borderRadius: 10, background: C.softer, border: `1px dashed ${C.line}` }}>{children}</div>;
 }
