@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { SPOUSE_INCOME_BANDS, NO_HOME_EXCEPTION, C } from "../data.js";
 import { deriveFacts, judgeAll, nearIncomeCap, won, eok, cashNeededOf } from "../engine.js";
 import { GOV_RULES } from "../products/index.js";
@@ -205,7 +205,7 @@ function FamilyCard({ elig, set, setHasSpouse, facts, ready }) {
       <Divider />
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 7 }}>
-        <span style={{ fontSize: 13, color: C.inkSoft, fontWeight: 600 }}>자녀 {kids.length > 0 ? `${kids.length}명` : "없음"}</span>
+        <span style={{ fontSize: 13, color: C.inkSoft, fontWeight: 600 }}>미성년 자녀 {kids.length > 0 ? `${kids.length}명` : "없음"}</span>
         <button onClick={addChild} style={{ padding: "6px 12px", borderRadius: 9, border: `1.5px solid ${C.line}`, background: "#fff", color: C.greenDeep, fontSize: 12, fontWeight: 800, cursor: "pointer" }}>+ 자녀 추가</button>
       </div>
       {kids.length === 0
@@ -239,39 +239,105 @@ function FamilyCard({ elig, set, setHasSpouse, facts, ready }) {
   );
 }
 
-/* ── 생년월일 세그먼트 입력 (년/월/일 3칸) ──
-   값은 여전히 "YYYY-MM-DD" 한 문자열로 흐른다 — engine.ageOf가 그 형식으로 읽기 때문에
-   여기서 새 상태 모양을 만들지 않는다. 세 칸을 이 문자열로 합치고("-"로 join) 다시
-   쪼개는("-"로 split) 식이라, 입력이 덜 채워졌을 땐 자연히 Invalid Date가 되고
-   engine.ageOf가 그걸 null로 읽는다 — "아직 안 채움"을 별도 플래그 없이 표현한다.
-   윤년·월별 마지막 날짜는 여기서 직접 클램프한다 — <input type=date>가 대신 해주던 걸
-   세그먼트 입력에선 우리가 챙겨야 한다(안 그러면 "2월 30일"이 "3월 2일"로 조용히 밀린다). */
-const onlyDigits = (s) => s.replace(/\D/g, "");
+/* ── 생년월일 휠 ──
+   키보드로 치지 않는다. 2026년이 가운데에서 시작하고, 위로 밀면 더 이전 해로 간다.
+   값은 여전히 "YYYY-MM-DD". 밀거나 누르기 전에는 빈 문자열 그대로라 나이가 생기지 않는다.
+   윤년·월말는 고르는 쪽에서 자른다. "2월 30일"이 다음 달로 밀리지 않게. */
+const BIRTH_YEAR_MAX = 2026;
+const BIRTH_YEAR_MIN = 1926;
+const BIRTH_YEARS = Array.from({ length: BIRTH_YEAR_MAX - BIRTH_YEAR_MIN + 1 }, (_, i) => BIRTH_YEAR_MAX - i);
+const BIRTH_MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
+const WHEEL_H = 32;
+
 const pad2 = (n) => String(n).padStart(2, "0");
-const clampSeg = (v, lo, hi) => (v.length < 2 ? v : pad2(Math.min(Math.max(Number(v) || lo, lo), hi)));
-const daysInMonth = (y, m) => (y.length === 4 && m.length >= 1 ? new Date(Number(y), Number(m), 0).getDate() : 31);
+const daysInMonth = (y, m) => new Date(Number(y), Number(m), 0).getDate() || 31;
 const splitYMD = (v) => { const [y = "", m = "", d = ""] = (v || "").split("-"); return [y, m, d]; };
 
-function BirthdateInput({ value, onChange }) {
-  const [y, m, d] = splitYMD(value);
-  const mRef = useRef(null), yRef = useRef(null), dRef = useRef(null);
-  const commit = (ny, nm, nd) => onChange([ny, nm, nd].join("-"));
-  const seg = (w) => ({ ...inputBox, width: w, padding: "10px 4px", textAlign: "center", fontVariantNumeric: "tabular-nums", flex: "none" });
+function WheelColumn({ label, items, selected, format, onSelect }) {
+  const ref = useRef(null);
+  const armed = useRef(false);
+  const dragging = useRef(false);
+  const touched = useRef(false);
+  const timer = useRef(0);
+  const index = Math.max(0, items.findIndex((it) => it === selected));
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || dragging.current) return;
+    armed.current = false;
+    el.scrollTop = index * WHEEL_H;
+    const id = requestAnimationFrame(() => { armed.current = true; });
+    return () => cancelAnimationFrame(id);
+  }, [index, items.length]);
+
+  function settle() {
+    const el = ref.current;
+    if (!el) return;
+    const next = Math.min(items.length - 1, Math.max(0, Math.round(el.scrollTop / WHEEL_H)));
+    dragging.current = false;
+    if (items[next] !== selected) onSelect(items[next]);
+  }
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      <input ref={yRef} aria-label="태어난 연도" inputMode="numeric" placeholder="년" maxLength={4} value={y} style={seg(72)}
-        onChange={(e) => { const v = onlyDigits(e.target.value).slice(0, 4); commit(v, m, d); if (v.length === 4) mRef.current?.focus(); }} />
-      <span style={{ color: C.faint }}>-</span>
-      <input ref={mRef} aria-label="태어난 월" inputMode="numeric" placeholder="월" maxLength={2} value={m} style={seg(48)}
-        onChange={(e) => { const v = onlyDigits(e.target.value).slice(0, 2); commit(y, clampSeg(v, 1, 12), d); if (v.length === 2) dRef.current?.focus(); }}
-        onBlur={() => m.length === 1 && commit(y, pad2(m), d)}
-        onKeyDown={(e) => { if (e.key === "Backspace" && m === "") yRef.current?.focus(); }} />
-      <span style={{ color: C.faint }}>-</span>
-      <input ref={dRef} aria-label="태어난 일" inputMode="numeric" placeholder="일" maxLength={2} value={d} style={seg(48)}
-        onChange={(e) => { const v = onlyDigits(e.target.value).slice(0, 2); commit(y, m, clampSeg(v, 1, daysInMonth(y, m))); }}
-        onBlur={() => d.length === 1 && commit(y, m, pad2(d))}
-        onKeyDown={(e) => { if (e.key === "Backspace" && d === "") mRef.current?.focus(); }} />
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: C.faint, marginBottom: 4 }}>{label}</div>
+      <div style={{ position: "relative", height: WHEEL_H * 5 }}>
+        <div aria-hidden="true" style={{ position: "absolute", left: 2, right: 2, top: WHEEL_H * 2, height: WHEEL_H, borderRadius: 8, background: C.soft, pointerEvents: "none" }} />
+        <div
+          ref={ref}
+          className="birth-wheel"
+          role="listbox"
+          aria-label={label}
+          onPointerDown={() => { touched.current = true; dragging.current = true; }}
+          onWheel={() => { touched.current = true; }}
+          onScroll={() => {
+            if (!armed.current || !touched.current) return;
+            dragging.current = true;
+            window.clearTimeout(timer.current);
+            timer.current = window.setTimeout(settle, 90);
+          }}
+        >
+          <div style={{ height: WHEEL_H * 2 }} />
+          {items.map((it) => {
+            const on = it === selected;
+            return (
+              <button key={it} type="button" role="option" aria-selected={on} onClick={() => onSelect(it)}
+                style={{ display: "block", width: "100%", height: WHEEL_H, scrollSnapAlign: "center", border: "none", background: "transparent", cursor: "pointer", fontSize: on ? 16 : 13, fontWeight: on ? 800 : 600, color: on ? C.ink : C.faint, fontVariantNumeric: "tabular-nums" }}>
+                {format(it)}
+              </button>
+            );
+          })}
+          <div style={{ height: WHEEL_H * 2 }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BirthdateInput({ value, onChange }) {
+  const [ys, ms, ds] = splitYMD(value);
+  const filled = ys.length === 4 && ms.length >= 1 && ds.length >= 1;
+  const year = filled ? Number(ys) : BIRTH_YEAR_MAX;
+  const month = filled ? Number(ms) : 1;
+  const day = filled ? Number(ds) : 1;
+  const dayItems = Array.from({ length: daysInMonth(year, month) }, (_, i) => i + 1);
+  const safeDay = Math.min(day, dayItems.length);
+
+  function commit(ny, nm, nd) {
+    const last = daysInMonth(ny, nm);
+    onChange(`${ny}-${pad2(nm)}-${pad2(Math.min(nd, last))}`);
+  }
+
+  return (
+    <div>
+      <style>{`.birth-wheel{height:${WHEEL_H * 5}px;overflow-y:auto;scroll-snap-type:y mandatory;overscroll-behavior:contain;scrollbar-width:none;mask-image:linear-gradient(to bottom,transparent,#000 22%,#000 78%,transparent);}
+.birth-wheel::-webkit-scrollbar{display:none;}`}</style>
+      {!filled && <div style={{ fontSize: 11, color: C.faint, marginBottom: 4 }}>2026년부터 위로 밀어 고르세요</div>}
+      <div style={{ display: "flex", gap: 6 }}>
+        <WheelColumn label="년" items={BIRTH_YEARS} selected={year} format={(n) => String(n)} onSelect={(v) => commit(v, month, safeDay)} />
+        <WheelColumn label="월" items={BIRTH_MONTHS} selected={month} format={(n) => `${n}월`} onSelect={(v) => commit(year, v, safeDay)} />
+        <WheelColumn label="일" items={dayItems} selected={safeDay} format={(n) => `${n}일`} onSelect={(v) => commit(year, month, v)} />
+      </div>
     </div>
   );
 }
