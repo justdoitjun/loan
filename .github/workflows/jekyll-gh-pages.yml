@@ -1,0 +1,60 @@
+# GitHub Pages 배포.
+# 이 저장소의 사이트는 Jekyll이 아니라 project/my-web 의 Vite 앱이다.
+# 배포 방식만 GitHub의 Pages 스타터(jekyll-gh-pages)와 같다.
+# 저장소 Settings → Pages → Build and deployment → Source 를 GitHub Actions 로 둔다.
+name: Deploy site to GitHub Pages
+ 
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+ 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+ 
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+ 
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+ 
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v5
+ 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: project/my-web/package-lock.json
+ 
+      - name: Build
+        working-directory: project/my-web
+        env:
+          # 사용자 사이트는 /, 프로젝트 사이트는 /저장소이름/ .
+          VITE_BASE: ${{ steps.pages.outputs.base_path }}/
+        run: npm ci && npm run build && touch dist/.nojekyll
+ 
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: project/my-web/dist
+ 
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
