@@ -1,5 +1,6 @@
 import { useState, useMemo, useLayoutEffect, useRef, useId } from "react";
-import { DATA, RULE, C } from "./data.js";
+import { RULE, C } from "./data.js";
+import { UNITS } from "./units.js";
 import { CITY, GUS, DONGS } from "./geo.js";
 import { evaluate, repaymentCapacity, buildCtx, won, eok } from "./engine.js";
 import { AppShell, Slider, eyebrow, h1, ghostBtn, listItem, modalOpt, fine, pill, BottomSheet, useOverlayLock } from "./ui.jsx";
@@ -34,7 +35,7 @@ export default function App() {
   const dsrCap = useMemo(() => repaymentCapacity(income, RULE.DSR, RULE.loanRate, RULE.loanYears, 0), [income]);
   const precise = personReady(person);
   const scoped = useMemo(
-    () => DATA.filter((d) => d.city === place.city && d.gu === place.gu && d.dong === place.dong),
+    () => UNITS.filter((d) => d.city === place.city && d.gu === place.gu && d.dong === place.dong),
     [place],
   );
   const results = useMemo(
@@ -170,7 +171,7 @@ export default function App() {
 
 /* 지역 목록의 동과 매물 데이터의 동은 둘 다 법정동이라 이름 그대로 맞춘다. */
 function unitCount(gu, dong) {
-  return DATA.filter((d) => d.gu === gu && (!dong || d.dong === dong)).length;
+  return UNITS.filter((d) => d.gu === gu && (!dong || d.dong === dong)).length;
 }
 
 function PlacePath({ place, onGu, onDong, sheet }) {

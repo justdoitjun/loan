@@ -1,9 +1,17 @@
 # 아키텍처 · 코드 구조
 
-- **정적 프론트엔드 한 장. 백엔드·DB·Redis 없음.** 서버에서 도는 배치는 없다.
-- 데이터는 정적 JSON: 매물 시세(노원 한 동네 스냅샷) / 한도 룰셋 / 대처법 족보.
-- 모든 계산과 로직은 브라우저에서 이뤄진다. 시세 갱신 = `scripts/fetch-units.mjs`가 `src/data/units.json`을 갈아끼우고 재배포(라이브 파이프라인 X). 앱은 그 스크립트를 import하지 않는다.
-- 스택: React + Vite. `npm run dev`로 로컬 구동, Vercel/Netlify로 정적 배포.
+- 화면은 정적 프론트엔드다. 대출 계산은 브라우저에서 한다. 스택은 React + Vite. `npm run dev`로 로컬 구동, 배포는 `npm run build` 후 `dist`.
+- 한도 룰셋·대처법 족보는 프론트 데이터 파일에 있다. 시세의 원본은 DB다. 화면이 읽는 시세는 배치가 export한 파일이다.
+
+## 시세 파이프라인
+
+`LAWD_CD`는 `project/batch/geo_code.js` 키 앞 5자리, 기본 `DEAL_YMD`는 202601~202609.
+
+1. **수집.** 배치가 국토부 아파트 매매 실거래가를 받아 **테이블 1**에 넣는다. 테이블 1은 이력성 데이터다. 거래 한 건이 한 행으로 쌓인다.
+2. **평균가.** 테이블 1을 조회해 평균가를 구하고 **테이블 2**를 갱신한다. 테이블 2는 화면용 현재 시세다.
+3. **export.** 테이블 2를 프론트 서버로 내보낸다. `src/data/seoul/units_YYYYMMDD.json`(서울 전체 한 파일)을 갈아끼우고 `src/units.js`의 import 날짜를 바꾼다. 실패하면 그 파일은 한 바이트도 바꾸지 않는다.
+
+지금 `python3 -m seoul_batch`는 아직 테이블 없이 XML에서 `src/data/seoul/`을 바로 쓴다. 위의 세 단계로 맞춘다.
 
 ## 파일 구조
 
@@ -21,13 +29,14 @@
 | `src/IncomeCheck.jsx` | **소득 신뢰도 자가진단.** 소득유형 선택 → 체크리스트 → 초록/노랑 논조 |
 | `src/engine.js` | 계산·판정 전부(중복 정의 금지). JSX 금지. 은행 기존부채 연상환은 `engine_bank_dsr.js`를 호출 |
 | `src/engine_bank_dsr.js` | **은행 DSR 기존 부채의 종류별 연 상환액.** 파라미터는 `DEBT_KINDS[].dsr`. 디딤돌은 호출하지 않음 |
-| `src/data.js` | 예산규칙·상품 **금융 파라미터**·`LEVER`(레버 범위)·화면 상수. 매물 `DATA`는 `src/data/seoul/` 구별 파일을 이어붙인 것. 로직 금지 |
+| `src/data.js` | 예산규칙·상품 **금융 파라미터**·`LEVER`(레버 범위)·화면 상수. 매물은 여기 없다(`src/units.js`). 로직 금지 |
 | `src/data/geo/geo_code.js` | **서울 법정동 코드표** `GEO_CODE`(`{ 법정동코드: { city, gu, dong, exist } }`) + `CITY`. `scripts/build-geo-code.mjs`가 `../openapi_data/code_geo_seoul.csv`(원본)에서 생성. 손으로 고치지 않는다. 로직 금지 |
 | `src/geo.js` | `GEO_CODE` → 화면용 `GUS`(구 목록)·`DONGS`(구별 현존 법정동). 코드 순서. JSX 금지 |
-| `src/data/seoul/nowongu_data.js` | 노원구 단지. 다른 구는 같은 폴더에 `*_data.js`로 두고 `data.js`의 `DATA`에 이어붙인다 |
-| `src/data/units.json` | 노원 실거래 스냅샷(정적). 수집 스크립트가 갈아끼운다. 앱은 스크립트를 import하지 않는다 |
+| `src/data/seoul/units_YYYYMMDD.json` | **서울 전체 단지·면적대별 대표가.** 테이블 2(`trade_average`) export 결과(`project/batch/job_average.py export`). 손으로 고치지 않는다. 필드: `id`(sgg_cd\|동\|단지\|면적대)·이름·동·전용·면적대·가격(만원)·거래건수·최근거래일 |
+| `src/units.js` | 위 JSON → 화면용 `UNITS`(`{ id, name, city, gu, dong, areaM2, price, areaBand, tradeCount, latestDealDate }`). 구 이름은 `id` 앞 5자리 → `GEO_CODE`. `areaM2`는 **실제 대표 전용면적**(디딤돌 85㎡ 판정용, 면적대 아님). 새 export를 받으면 import 경로의 날짜만 바꾼다. JSX 금지 |
 | `src/data/incomeRules.js` | 디딤돌 **소득 인정 규정 원문 보존본**(엑셀 구조화, 원문 대조 완료). 요약으로 덮어쓰지 말 것. 화면은 `ACTIVE_INCOME_TYPES`(소득추정 제외) |
-| `scripts/fetch-units.mjs` | 오프라인 시세 수집. `DATA_GO_KR_KEY` + `--from/--to`. 결과는 `units.json`. 앱은 import하지 않음 |
+| `project/batch` (`python3 -m seoul_batch`) | 실거래 수집. 목표 경로는 테이블 1 → 테이블 2(평균가) → `src/data/seoul/` export. 지금은 XML에서 파일을 바로 씀 |
+| `scripts/fetch-units.mjs` | 예전 노원 수집. 결과는 `units.json`. 앱은 import하지 않음 |
 | `src/products/didimdol.js` | 디딤돌 5종 **자격 상한 규칙 데이터** |
 | `src/products/bogeumjari.js` | 보금자리 규칙 데이터(같은 DSL) |
 | `src/products/bank.js` | 은행 일반 주담대 규칙 데이터(진입 조건만, 상한은 전부 `null`) |
@@ -73,7 +82,7 @@
 ## 파일별 경계
 
 - 계산은 `engine.js`에만. 화면 파일에서 같은 식을 다시 쓰지 않는다.
-- 데이터는 `data.js`·`src/data/seoul/`·`src/data/geo/`·`products/*`에만. **로직(함수)을 데이터 파일에 넣지 않는다.**
+- 프론트 데이터는 `data.js`·`src/data/seoul/`·`src/data/geo/`·`products/*`에만. **로직(함수)을 데이터 파일에 넣지 않는다.** 시세의 원본은 테이블 1·2이고, `src/data/seoul/`은 테이블 2의 export다.
 - 자격 상한(소득·가격·면적·한도)은 `products/*`가 유일한 출처, 금융 파라미터(금리·LTV·cap·실행시점)는
   `data.PRODUCTS`가 유일한 출처. 같은 숫자를 두 곳에 두지 않는다.
 - 컨텍스트는 `engine.buildCtx()`가 만든 객체 하나(`ctx`)로만 흐른다. 화면이 상태를 복제하지 않는다.

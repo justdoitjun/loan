@@ -1,14 +1,7 @@
-import { NOWONGU_DATA } from "./data/seoul/nowongu_data.js";
-
 /* 데이터·상수만 두는 곳. 계산은 engine.js, 화면은 각 컴포넌트 파일.
    여기에 로직(함수)을 넣지 말 것 — 중복 정의의 시작점이 된다.
    상품별 '자격 상한 규칙'은 src/products/* 로 나갔다. 여기 남은 건 금융 파라미터뿐.
-   단지는 구별로 src/data/seoul/ 에 두고, 아래 DATA는 그 배열을 이어붙인 것이다. */
-
-/* ✏️ 여기 1 — DATA : 단지 (가격 만원). city·gu·dong으로 첫 화면 지역 선택을 가른다. */
-export const DATA = [
-  ...NOWONGU_DATA,
-];
+   매물(단지)은 여기 없다 — src/data/seoul/units_YYYYMMDD.json(시세 export)을 src/units.js 가 UNITS 로 바꾼다. */
 
 /* 첫 화면 지역(시·구·동)은 src/data/geo/geo_code.js(법정동 코드표) → src/geo.js. */
 
