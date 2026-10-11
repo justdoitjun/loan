@@ -5,20 +5,22 @@
    위→아래:
      ① 부채 입력      가정의 시작 위치.
      ② 필요 현금 + 게이지  "계산해 보면". 집값이 막대 전체. 남은 칸이 필요 현금.
-     ③ 이렇게 바꿔 보면요  기존 대출을 줄이면 / 소득이 더 인정되면 / 방공제를 켜고 끈다.
-                           결과가 안 움직이면 그 칸은 그리지 않는다.
+     ③ 이렇게 바꿔 보면요  기존 대출을 줄이면 / 소득이 더 인정되면 / 방 공제 보전.
+                           부채·소득은 결과가 안 움직이면 그 칸을 그리지 않는다.
+                           방공제(세 번째)는 한도가 안 움직여도 항상 펼쳐 둔다.
+                           기본은 아니오. 네로 바꾸면 보전으로 계산하고, 누가 받을 수 있는지는 팝업.
 
    화면에 조종간·엔진·레버를 쓰지 않는다.
    계산은 직접 하지 않는다. products/limit.js의 limitAt/ceilingAt에 가정값을 넘기고 결과만 그린다.
    ⚠️ 자격은 여기서 절대 다시 묻지 않는다. 자격은 Eligibility 화면에서만 받는다
       (정부 → eligibility/gov.jsx, 은행 → eligibility/bank.jsx). */
-import { useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { PRODUCTS, LEVER, DEBT_KINDS, RULE, C } from "./data.js";
 import { deriveFacts, judgeAll, won, eok, cashNeededOf, monthlyInstallment } from "./engine.js";
 import { limitAt, ceilingAt } from "./products/limit.js";
 import { leverOf, detailReady } from "./person.js";
 import { judgeUnits } from "./verdict.js";
-import { BackButton, Section, Stat, useTween, eyebrow, h1, card, fine, rangeFill } from "./ui.jsx";
+import { BackButton, Section, Stat, useTween, eyebrow, h1, card, fine, rangeFill, useOverlayLock } from "./ui.jsx";
 import DetailInfo from "./DetailInfo.jsx";
 
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
@@ -94,10 +96,14 @@ export default function Strategy({ ctx, person, pickedKey, detail, setDetail, pu
    ══════════════════════════════════════════════════════════════════════════ */
 function Cockpit({ ctx, picked, lever, base, price, incomeMax, incomeRoom, incomeCap, pulled, pullLever, pullDebt, onReset }) {
   const [partsOpen, setPartsOpen] = useState(true);
+  const [roomHelp, setRoomHelp] = useState(false);
   const P = PRODUCTS[picked.product];
 
-  /* ── 레버 → 모듈 → 결과 ── */
-  const reach = limitAt(picked.product, lever, picked.limit);
+  /* ── 레버 → 모듈 → 결과 ──
+     방 공제 보전은 기본 아니오. 아직 안 고른 값(null)도 아니오와 같이 한도에서 뺀다.
+     은행·보금자리가 상쇄를 기본으로 두어도, 이 화면에서는 네를 고르기 전에는 빼지 않는다. */
+  const roomOffset = lever.offsetRoom === true;
+  const reach = limitAt(picked.product, { ...lever, offsetRoom: roomOffset }, picked.limit);
   /* 부채·소득 천장은 시작 위치 기준. 방공제를 켜서 한도를 낮춰도 눈금이 따라 내려가면 안 된다.
      눈금은 방공제를 뺐을 때(상쇄)까지 포함한 더 높은 쪽. */
   const baseCeil = ceilingAt(picked.product, base, picked.limit);
@@ -118,17 +124,12 @@ function Cockpit({ ctx, picked, lever, base, price, incomeMax, incomeRoom, incom
   /* 이 레버들이 '통틀어' 열 수 있는 폭 = 시작 위치(base)에서 천장까지.
      0이면 손잡이만 있고 결과가 안 움직인다 — 벽이 담보(LTV)나 대출 한도라서
      부채·소득으로는 안 내려가기 때문. 그때는 그 두 칸을 그리지 않는다.
-     방공제를 켜고 끌 때 한도가 움직이면 그 스위치만 남긴다.
-
      ⚠️ 현재 위치(reach)로 재면 안 된다. 가정을 끝까지 바꾼 순간 reach == ceil이 되어
         방금 9천만원을 열어놓고도 "이 길은 안 움직여요"라고 말하고, 슬라이더가 손 밑에서 사라진다.
-        '열 수 있는 폭'은 사용자가 어디까지 바꿨느냐와 무관한 구조적 성질이다. */
+        '열 수 있는 폭'은 사용자가 어디까지 바꿨느냐와 무관한 구조적 성질이다.
+     방공제(세 번째)는 이 폭과 상관없이 항상 펼쳐 둔다. */
   const baseReach = limitAt(picked.product, base, picked.limit);
   const leverRoom = Math.max(baseCeil.limit - baseReach.limit, 0);
-  /* 방공제 스위치는 지금 부채·소득에서 켜고 끌 때 한도가 달라질 때만. 안 움직이면 그리지 않는다. */
-  const roomOnLimit = limitAt(picked.product, { ...lever, offsetRoom: false }, picked.limit).limit;
-  const roomOffLimit = limitAt(picked.product, { ...lever, offsetRoom: true }, picked.limit).limit;
-  const roomMoves = Math.abs(roomOnLimit - roomOffLimit) >= 100;
   const leversInert = leverRoom < 100;
 
   return (
@@ -189,8 +190,7 @@ function Cockpit({ ctx, picked, lever, base, price, incomeMax, incomeRoom, incom
       </Section>
 
       {/* ── ③ 레버 ──
-          결과를 못 움직이면 이 칸 자체를 그리지 않는다. ②가 이미 대출·현금을 말한다. */}
-      {(!leversInert || roomMoves) && (
+          부채·소득은 결과가 안 움직이면 그 칸만 뺀다. 방공제는 항상 펼친다. */}
       <Section title="③ 대출 전략" tone={pulled ? undefined : "ok"}>
 
         {!leversInert && <div style={{ marginBottom: 8 }}>
@@ -229,25 +229,22 @@ function Cockpit({ ctx, picked, lever, base, price, incomeMax, incomeRoom, incom
         </div>
         )}
 
-        {roomMoves && (
-          <RoomSwitch
-            on={!(lever.offsetRoom ?? P.offsetsRoomDeduction)}
-            changed={lever.offsetRoom != null && lever.offsetRoom !== P.offsetsRoomDeduction}
-            divided={!leversInert}
-            onPick={(nextOn) => {
-              const nextOffset = !nextOn;
-              if ((lever.offsetRoom ?? P.offsetsRoomDeduction) === nextOffset) return;
-              pullLever("offsetRoom", nextOffset);
-            }} />
-        )}
+        <RoomSwitch
+          yes={roomOffset}
+          divided={!leversInert}
+          onPick={(nextYes) => {
+            if ((lever.offsetRoom === true) === nextYes) return;
+            pullLever("offsetRoom", nextYes);
+            if (nextYes) setRoomHelp(true);
+          }} />
 
         {pulled && (
-          <button onClick={onReset} style={{ marginTop: 8, padding: "7px 12px", borderRadius: 10, border: `1.5px solid ${C.line}`, background: "#fff", color: C.inkSoft, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+          <button onClick={() => { setRoomHelp(false); onReset(); }} style={{ marginTop: 8, padding: "7px 12px", borderRadius: 10, border: `1.5px solid ${C.line}`, background: "#fff", color: C.inkSoft, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
             ↺ 원래대로
           </button>
         )}
       </Section>
-      )}
+      {roomHelp && <RoomOffsetDialog onClose={() => setRoomHelp(false)} />}
     </>
   );
 }
@@ -340,28 +337,66 @@ function Gauge({ price, reach, ceiling }) {
   );
 }
 
-/* ── 레버 조각 ── */
-function RoomSwitch({ on, changed, divided, onPick }) {
+/* ── 레버 조각 ──
+   방공제(전략 3)는 접지 않는다. 질문과 아니오·네는 한 줄.
+   기본은 아니오. 네로 켜는 순간에만 누가 보전받을 수 있는지 팝업을 연다. */
+function RoomSwitch({ yes, divided, onPick }) {
   const optStyle = (selected) => ({
     border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer",
     background: selected ? C.green : "transparent",
     color: selected ? C.onAccent : C.inkSoft,
+    whiteSpace: "nowrap",
   });
   return (
     <div style={{ paddingTop: divided ? 8 : 0, borderTop: divided ? `1px solid ${C.line}` : "none" }}>
-      <LeverHead title="방공제는요?" />
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-        <span style={{ fontSize: 12, color: C.inkSoft, fontWeight: 600 }}>방공제</span>
-        <div role="group" aria-label="방공제" style={{ display: "flex", padding: 2, borderRadius: 10, background: C.track }}>
-          <button type="button" aria-pressed={!on} onClick={() => onPick(false)} style={optStyle(!on)}>꺼짐</button>
-          <button type="button" aria-pressed={on} onClick={() => onPick(true)} style={optStyle(on)}>켜짐</button>
+      <LeverHead title="방공제" />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "nowrap" }}>
+        <span data-fit="line" style={{ flex: "1 1 auto", minWidth: 0, fontSize: 13, fontWeight: 700, color: C.ink, lineHeight: 1.3 }}>방 공제를 보전받을까요?</span>
+        <div role="group" aria-label="방 공제를 보전받을까요?" style={{ display: "flex", flex: "0 0 auto", padding: 2, borderRadius: 10, background: C.track }}>
+          <button type="button" aria-pressed={!yes} onClick={() => onPick(false)} style={optStyle(!yes)}>아니오</button>
+          <button type="button" aria-pressed={yes} onClick={() => onPick(true)} style={optStyle(yes)}>네</button>
         </div>
       </div>
-      {changed && (
+      {yes && (
         <div style={{ marginTop: 6, fontSize: 11, color: C.inkSoft, fontVariantNumeric: "tabular-nums" }}>
-          {on ? `${won(RULE.roomDeduction)} 빼면` : `${won(RULE.roomDeduction)} 빼지 않으면`}
+          {won(RULE.roomDeduction)}을 한도에서 빼지 않아요.
         </div>
       )}
+    </div>
+  );
+}
+
+/* 네로 켠 뒤에만. 누구의 한도를 보전으로 계산해도 되는지를 말한다. 닫아도 네는 유지된다. */
+function RoomOffsetDialog({ onClose }) {
+  const panelRef = useRef(null);
+  const titleId = useId();
+  useOverlayLock(onClose, panelRef);
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(32,28,22,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 18 }}>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={(e) => e.stopPropagation()} className="modal" style={{ width: "100%", maxWidth: 420, maxHeight: "min(90dvh, 720px)", overflowY: "auto", background: "#fff", color: C.ink, colorScheme: "light", borderRadius: 20, padding: "20px 20px 22px", outline: "none" }}>
+        <h2 id={titleId} data-fit="line" style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>방 공제 보전, 누가 받을 수 있나요?</h2>
+        <div data-fit="prose" style={{ fontSize: 14, color: C.ink, lineHeight: 1.65, marginTop: 12 }}>
+          <p style={{ margin: "0 0 10px" }}>
+            집을 담보로 빌릴 때, 세입자가 가장 먼저 돌려받는 소액보증금만큼 한도에서 빼는 게 방 공제예요. 서울은 {won(RULE.roomDeduction)}원이에요. 아래 보증에 가입하면 그 금액을 빼지 않고 보전받아요.
+          </p>
+          <p style={{ margin: "0 0 6px", fontWeight: 800 }}>받을 수 있는 분</p>
+          <ul style={{ margin: "0 0 12px", paddingLeft: 18 }}>
+            <li>본인이 살 주택을 담보로 대출받고, 등기에 가압류·가처분처럼 권리를 막는 표시가 없는 분</li>
+            <li>은행 주택담보대출은 MCI(모기지신용보험, 서울보증보험). 보증료는 은행이 내요.</li>
+            <li>보금자리론처럼 주택금융공사 대출은 MCG(모기지신용보증). 보증료는 본인이 내요.</li>
+          </ul>
+          <p style={{ margin: "0 0 6px", fontWeight: 800 }}>받기 어려운 분</p>
+          <ul style={{ margin: "0 0 12px", paddingLeft: 18 }}>
+            <li>미성년자, 재외국민, 외국인</li>
+            <li>신용정보 관리대상이거나, 주택금융공사 구상권이 남아 있는 분</li>
+            <li>주택이 아니거나, 권리 제한이 있는 집</li>
+          </ul>
+          <p style={{ margin: 0, color: C.inkSoft }}>
+            디딤돌대출은 원칙적으로 방 공제를 빼요. 구입자금보증에 가입되는 경우에만 보전받을 수 있어요. 가입되는지는 창구에서 확정해요.
+          </p>
+        </div>
+        <button type="button" onClick={onClose} style={{ width: "100%", marginTop: 16, padding: "14px", borderRadius: 13, border: "none", background: C.green, color: C.onAccent, fontSize: 15, fontWeight: 800, cursor: "pointer" }}>확인</button>
+      </div>
     </div>
   );
 }

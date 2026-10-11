@@ -7,7 +7,7 @@
 | 항목 | 값 | 코드 | 비고 |
 |---|---|---|---|
 | LTV | 70% | `RULE.LTV` · `PRODUCTS.didimdol.LTV` · `PRODUCTS.bank.LTV` | 원문: 생애최초 80%(소유권·규제지역이면 70%). **MVP는 70%만** — 80% 티어는 미구현. 은행 LTV 표는 `products/_common.md`, 행 선택은 `products/bank/bank.md` 1절 |
-| 방공제 | 5,500만 차감 | `RULE.roomDeduction` | 디딤돌은 상쇄 안 함(`offsetsRoomDeduction: false`). 금액은 가정치 |
+| 방공제 | 5,500만 차감 | `RULE.roomDeduction` | 방법 화면 기본은 차감(아니오). 네일 때만 상쇄. 디딤돌 상품 플래그는 상쇄 안 함. 금액은 가정치 |
 | DTI 상한 | 60% | `DIDIMDOL_DTI.cap` | 디딤돌 상환능력 상한 |
 | DTI 산정만기 | 30년 | `DIDIMDOL_DTI.years` | 실제 대출 만기와 무관한 산정 강제 |
 | 본건 원리금 환산금리 | 3.0% | `DIDIMDOL_LOAN_RATE` | **계산 전용.** 화면에 금리로 표시하지 않음 |

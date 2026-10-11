@@ -16,7 +16,7 @@
 | `src/eligibility/gov.jsx` | **정부대출 자격 질문 + 가능 상품 목록.** 디딤돌·보금자리 판정이 여기 |
 | `src/eligibility/bank.jsx` | **은행대출 탭.** 질문 2개(주택 보유 상태 · 배우자 소득) → 일반 주담대 카드. 은행 질문이 늘면 여기만 고친다 |
 | `src/eligibility/shared.jsx` | 두 탭이 같이 쓰는 질문 조각(YesNo · 배우자 소득 트랙 · 답변 드랍다운). 상품 지식 없음 |
-| `src/Strategy.jsx` | **방법 화면.** 부채 입력 → 필요 현금 + 게이지 → 기존 대출을 줄이면 / 소득이 인정되면 (또는 `leversInert`) |
+| `src/Strategy.jsx` | **방법 화면.** 부채 입력 → 필요 현금 + 게이지 → 기존 대출을 줄이면 / 소득이 인정되면 / 방 공제 보전(항상 펼침, 기본 아니오) |
 | `src/DetailInfo.jsx` | **부채를 종류별로 입력**(`data.DEBT_KINDS`) = 가정의 시작 위치. Strategy 상단 |
 | `src/IncomeCheck.jsx` | **소득 신뢰도 자가진단.** 소득유형 선택 → 체크리스트 → 초록/노랑 논조 |
 | `src/engine.js` | 계산·판정 전부(중복 정의 금지). JSX 금지. 은행 기존부채 연상환은 `engine_bank_dsr.js`를 호출 |
