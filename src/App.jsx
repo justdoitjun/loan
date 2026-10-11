@@ -1,8 +1,8 @@
 import { useState, useMemo, useLayoutEffect, useRef, useId } from "react";
 import { DATA, CITY, GUS, DONGS, RULE, C } from "./data.js";
 import { evaluate, repaymentCapacity, buildCtx, won, eok } from "./engine.js";
-import { AppShell, Slider, eyebrow, h1, ghostBtn, listItem, modalOpt, fine, BottomSheet, useOverlayLock } from "./ui.jsx";
-import { EMPTY_PERSON, personReady } from "./person.js";
+import { AppShell, Slider, eyebrow, h1, ghostBtn, listItem, modalOpt, fine, pill, BottomSheet, useOverlayLock } from "./ui.jsx";
+import { EMPTY_PERSON, personReady, emptyDebts } from "./person.js";
 import { judgeUnits } from "./verdict.js";
 import Eligibility from "./Eligibility.jsx";
 import Strategy from "./Strategy.jsx";
@@ -17,6 +17,7 @@ export default function App() {
   const { ownIncome: income } = person;
   const [step, setStep] = useState("budget");
   const [modalUnit, setModalUnit] = useState(null);    // 정부/은행 선택 팝업
+  const [incomeAsk, setIncomeAsk] = useState(null);  // 매물을 누르고, 이 소득으로 볼지 묻는 중
   const [unit, setUnit] = useState(null);              // 고른 매물
   const [kind, setKind] = useState("gov");             // 정부 | 은행
   const [pickedKey, setPickedKey] = useState(null);    // 가능 목록에서 고른 상품(규칙 key)
@@ -60,6 +61,20 @@ export default function App() {
   /* 가능 목록에서 상품 하나 선택 → 전략. 컨텍스트는 ctx가 통째로 넘어간다. */
   function pickProduct(key) { setPickedKey(key); setStep("strategy"); }
 
+  /* 방법 화면에서 만든 가정(부채 확정·레버)을 비운다.
+     뒤로 가는 것은 선택을 다시 하는 것이다. 자격 답변과 연소득 슬라이더는 그대로 둔다. */
+  function clearStrategy() {
+    setPull(null);
+    setPickedKey(null);
+    setDetail({ debts: emptyDebts(), debtConfirmed: false, incomeQuality: { type: null, stable: null } });
+  }
+
+  function acceptIncome() {
+    if (!incomeAsk) return;
+    setModalUnit(incomeAsk);
+    setIncomeAsk(null);
+  }
+
   /* 조종간 미니지도에서 점을 눌렀을 때 — 화면 전환 없이 '목표 매물'만 갈아끼운다.
      ⚠️ 사람 상태(자격·부채·레버)는 건드리지 않는다. 그게 이 인터랙션의 전부다 —
         매물만 바뀌고 나머지는 그대로여서 재질문 없이 즉시 다시 판정된다.
@@ -71,7 +86,7 @@ export default function App() {
     setUnit(next); setPickedKey(null);
   }
 
-  const overlay = sheet || modalUnit;
+  const overlay = sheet || modalUnit || incomeAsk;
 
   return (
     <AppShell>
@@ -101,7 +116,7 @@ export default function App() {
             <span style={{ fontSize: 12, color: C.inkSoft }}>필요 현금 많은 순</span>
           </div>
           {listed.map((r) => (
-            <button key={r.id} onClick={() => setModalUnit(r)} style={listItem}>
+            <button key={r.id} onClick={() => setIncomeAsk(r)} style={listItem}>
               <div>
                 <div style={{ fontSize: 15, color: C.ink, fontWeight: 700 }}>{r.name}</div>
                 <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 2 }}>전용 {r.areaM2}㎡ · 시세 {eok(r.price)}</div>
@@ -125,7 +140,7 @@ export default function App() {
           unit={unit} ownIncome={income}
           kind={kind} setKind={setKind}
           elig={person.elig} setElig={setElig}
-          onBack={() => setStep("budget")} onPick={pickProduct} />
+          onBack={() => { clearStrategy(); setStep("budget"); }} onPick={pickProduct} />
       )}
 
       {step === "strategy" && ctx && (
@@ -135,10 +150,11 @@ export default function App() {
           pull={person.pull} setPull={setPull}
           onSwapUnit={swapUnit}
           units={scoped}
-          onBack={() => setStep("eligibility")} />
+          onBack={() => { clearStrategy(); setStep("eligibility"); }} />
       )}
       </div>
 
+      {incomeAsk && <IncomeAsk income={income} onYes={acceptIncome} onNo={() => setIncomeAsk(null)} />}
       {modalUnit && <ProductModal r={modalUnit} onPick={pickKind} onClose={() => setModalUnit(null)} />}
       {sheet && (
         <PlaceSheet
@@ -277,6 +293,24 @@ function PlaceSheet({ start, place, onCommit, onClose }) {
         )}
       </div>
     </BottomSheet>
+  );
+}
+
+/* 매물을 누르자마자 정부/은행으로 가지 않는다. 지금 슬라이더 소득으로 볼지 먼저 묻는다. */
+function IncomeAsk({ income, onYes, onNo }) {
+  const panelRef = useRef(null);
+  const titleId = useId();
+  useOverlayLock(onNo, panelRef);
+  return (
+    <div onClick={onNo} style={{ position: "fixed", inset: 0, background: "rgba(32,28,22,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 18 }}>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={(e) => e.stopPropagation()} className="modal" style={{ width: "100%", maxWidth: 420, background: "#fff", color: C.ink, colorScheme: "light", borderRadius: 20, padding: "20px 20px 22px", outline: "none" }}>
+        <h2 id={titleId} data-fit="line" style={{ fontSize: 18, fontWeight: 800, margin: 0, lineHeight: 1.4 }}>소득 {won(income)}원으로 평가해볼까요?</h2>
+        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+          <button type="button" onClick={onYes} style={pill(true)}>Yes</button>
+          <button type="button" onClick={onNo} style={pill(false)}>No</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

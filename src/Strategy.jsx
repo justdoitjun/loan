@@ -26,8 +26,9 @@ import DetailInfo from "./DetailInfo.jsx";
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
 /* ⚠️ 레버(pull)는 이 화면의 로컬 state가 아니다 — person.pull에 있고 props로 내려온다.
-   이 화면을 나갔다 와도 당긴 위치가 유지되고, 더 중요하게는 지도가 같은 값을 읽어서
-   레버를 움직이는 순간 모든 매물이 다시 칠해진다. 여기 useState로 되돌리지 말 것. */
+   이 화면에 있는 동안 지도가 같은 값을 읽어서, 레버를 움직이는 순간 모든 매물이 다시 칠해진다.
+   여기 useState로 되돌리지 말 것.
+   뒤로 가기(가능한 대출 목록 → 매물 목록)는 선택을 다시 하는 것이라, App이 pull과 부채 확정을 비운다. */
 export default function Strategy({ ctx, person, pickedKey, detail, setDetail, pull, setPull, onSwapUnit, units, onBack }) {
   const { passed } = judgeAll(deriveFacts(ctx));
   const picked = passed.find((p) => p.key === pickedKey) ?? passed[0] ?? null;
