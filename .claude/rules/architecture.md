@@ -21,7 +21,8 @@
 | `src/IncomeCheck.jsx` | **소득 신뢰도 자가진단.** 소득유형 선택 → 체크리스트 → 초록/노랑 논조 |
 | `src/engine.js` | 계산·판정 전부(중복 정의 금지). JSX 금지. 은행 기존부채 연상환은 `engine_bank_dsr.js`를 호출 |
 | `src/engine_bank_dsr.js` | **은행 DSR 기존 부채의 종류별 연 상환액.** 파라미터는 `DEBT_KINDS[].dsr`. 디딤돌은 호출하지 않음 |
-| `src/data.js` | 매물·예산규칙·상품 **금융 파라미터**·`LEVER`(레버 범위)·화면 상수. 로직 금지 |
+| `src/data.js` | 예산규칙·상품 **금융 파라미터**·`LEVER`(레버 범위)·화면 상수. 매물 `DATA`는 `src/data/seoul/` 구별 파일을 이어붙인 것. 로직 금지 |
+| `src/data/seoul/nowongu_data.js` | 노원구 단지. 다른 구는 같은 폴더에 `*_data.js`로 두고 `data.js`의 `DATA`에 이어붙인다 |
 | `src/data/units.json` | 노원 실거래 스냅샷(정적). 수집 스크립트가 갈아끼운다. 앱은 스크립트를 import하지 않는다 |
 | `src/data/incomeRules.js` | 디딤돌 **소득 인정 규정 원문 보존본**(엑셀 구조화, 원문 대조 완료). 요약으로 덮어쓰지 말 것. 화면은 `ACTIVE_INCOME_TYPES`(소득추정 제외) |
 | `scripts/fetch-units.mjs` | 오프라인 시세 수집. `DATA_GO_KR_KEY` + `--from/--to`. 결과는 `units.json`. 앱은 import하지 않음 |
@@ -70,7 +71,7 @@
 ## 파일별 경계
 
 - 계산은 `engine.js`에만. 화면 파일에서 같은 식을 다시 쓰지 않는다.
-- 데이터는 `data.js`·`products/*`에만. **로직(함수)을 데이터 파일에 넣지 않는다.**
+- 데이터는 `data.js`·`src/data/seoul/`·`products/*`에만. **로직(함수)을 데이터 파일에 넣지 않는다.**
 - 자격 상한(소득·가격·면적·한도)은 `products/*`가 유일한 출처, 금융 파라미터(금리·LTV·cap·실행시점)는
   `data.PRODUCTS`가 유일한 출처. 같은 숫자를 두 곳에 두지 않는다.
 - 컨텍스트는 `engine.buildCtx()`가 만든 객체 하나(`ctx`)로만 흐른다. 화면이 상태를 복제하지 않는다.
