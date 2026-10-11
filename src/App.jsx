@@ -1,5 +1,6 @@
 import { useState, useMemo, useLayoutEffect, useRef, useId } from "react";
-import { DATA, CITY, GUS, DONGS, RULE, C } from "./data.js";
+import { DATA, RULE, C } from "./data.js";
+import { CITY, GUS, DONGS } from "./geo.js";
 import { evaluate, repaymentCapacity, buildCtx, won, eok } from "./engine.js";
 import { AppShell, Slider, eyebrow, h1, ghostBtn, listItem, modalOpt, fine, pill, BottomSheet, useOverlayLock } from "./ui.jsx";
 import { EMPTY_PERSON, personReady, emptyDebts } from "./person.js";
@@ -21,7 +22,7 @@ export default function App() {
   const [unit, setUnit] = useState(null);              // 고른 매물
   const [kind, setKind] = useState("gov");             // 정부 | 은행
   const [pickedKey, setPickedKey] = useState(null);    // 가능 목록에서 고른 상품(규칙 key)
-  const [place, setPlace] = useState({ city: CITY, gu: "노원구", dong: "중계본동" });
+  const [place, setPlace] = useState({ city: CITY, gu: "노원구", dong: "중계동" });
   const [sheet, setSheet] = useState(null);            // "gu" | "dong" | null
 
   const incomeTrustResult = incomeCheckResult(person.incomeCheck); // null | { tone, type, notes }
@@ -33,7 +34,7 @@ export default function App() {
   const dsrCap = useMemo(() => repaymentCapacity(income, RULE.DSR, RULE.loanRate, RULE.loanYears, 0), [income]);
   const precise = personReady(person);
   const scoped = useMemo(
-    () => DATA.filter((d) => d.city === place.city && d.gu === place.gu && (d.dong === place.dong || d.dong === legalDongOf(place.dong))),
+    () => DATA.filter((d) => d.city === place.city && d.gu === place.gu && d.dong === place.dong),
     [place],
   );
   const results = useMemo(
@@ -167,14 +168,9 @@ export default function App() {
   );
 }
 
-/* 행정동 → 매물 데이터의 법정동. 중계1동·중계본동 → 중계동. 매물 없는 동은 그대로여서 목록이 빈다. */
-function legalDongOf(dong) {
-  if (!dong) return dong;
-  return dong.replace(/본동$/, "동").replace(/제?\d+(·\d+)*동$/, "동");
-}
-
+/* 지역 목록의 동과 매물 데이터의 동은 둘 다 법정동이라 이름 그대로 맞춘다. */
 function unitCount(gu, dong) {
-  return DATA.filter((d) => d.gu === gu && (!dong || d.dong === dong || d.dong === legalDongOf(dong))).length;
+  return DATA.filter((d) => d.gu === gu && (!dong || d.dong === dong)).length;
 }
 
 function PlacePath({ place, onGu, onDong, sheet }) {
