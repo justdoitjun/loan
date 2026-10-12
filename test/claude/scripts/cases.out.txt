@@ -1,0 +1,129 @@
+PASS	FS-01	중계동 건수	actual=102	expected=102
+PASS	FS-02	노원구 건수	actual=523	expected=523
+PASS	FS-11	노원구 동별	actual={"월계동":82,"공릉동":109,"하계동":45,"상계동":185,"중계동":102}	expected={"월계동":82,"공릉동":109,"하계동":45,"상계동":185,"중계동":102}
+PASS	FS-12	도달 가능 매물 합	actual=8607	expected=8607
+PASS	FS-08	순화동 건수	actual=6	expected=6
+PASS	DA-11	구 개수	actual=25	expected=25
+PASS	FS-21	0원 맨위/맨아래	actual=["동진신안",134.74,153750,"동진",22950]	expected=["동진신안",134.74,153750,"동진",22950]
+PASS	FS-22	4000 맨위	actual=["동진신안",27928,125822]	expected=["동진신안",27928,125822]
+PASS	FS-22b	4000 맨아래 2개	actual=["동진",3680,19270,"화인상가",9620,28180]	expected=["동진",3680,19270,"화인상가",9620,28180]
+PASS	FS-23	현대그린 4000	actual=[19300,42700]	expected=[19300,42700]
+PASS	FS-24	현대그린 1000	actual=[6982,55018]	expected=[6982,55018]
+PASS	FS-25	숭인한양 0	actual=0	expected=0
+PASS	FS-26	evaluate 13750/13751	actual=[0,0.4]	expected=[0,0.4]
+PASS	FS-30	현대그린 정밀 = 은행 DSR	actual=20041	expected=20041
+FAIL	FS-31/F-02	성원2 정밀(규칙 기대=은행 2억41만)	actual=[36000,"bogeumjari"]	expected=[20041,"bank"]	# 현재 코드가 보금자리 cap 3.6억을 낸다면 F-02 재현
+PASS	FS-31/F-02b	은행 카드는 2억41만	actual=20041	expected=20041
+PASS	X-12	정부 무주택 아니오 → personReady	actual=false	expected=false
+PASS	X-13	은행 keep → personReady	actual=false	expected=false
+PASS	X-14	은행 없어요 → ready	actual=true	expected=true
+PASS	X-15	처분조건부 → ready(생애최초 무관)	actual=true	expected=true
+FAIL	X-16	39세 청년 미답	actual=true	expected=false
+PASS	DG-01	일반가구 rough/티어	actual=[10565,6000,30000,20000,"bogeumjari",16065]	expected=[10565,6000,30000,20000,"bogeumjari",16065]
+PASS	DG-02	화인상가 가격초과	actual=[[["price",7800]],["bogeumjari"]]	expected=[[["price",7800]],["bogeumjari"]]
+PASS	DG-03	우성 1.5억	actual=15000	expected=15000
+PASS	DG-04	우성 생애최초 2억 티어 / LTV	actual=[20000,15500]	expected=[20000,15500]
+PASS	DG-05	소득 6000 통과	actual=true	expected=true
+PASS	DG-06	소득 6100 초과	actual=[["income",100]]	expected=[["income",100]]
+PASS	DG-11	삼성 59.91	actual=14590	expected=14590
+FAIL	DG-13/F-09	면적 초과 표시값	actual=["0.240000000000002㎡"]	expected=["0.24㎡"]	# F-09: 부동소수 그대로면 FAIL
+PASS	DG-14	자녀 있는 30+ → 기본 85㎡	actual=[8150]	expected=[8150]
+PASS	DG-15	28세 단독 → 세대주 막힘, 보금자리만	actual=[1,["bogeumjari"]]	expected=[1,["bogeumjari"]]
+PASS	DG-16	28세+자녀 삼창 2.4억	actual=24000	expected=24000
+PASS	DG-17	1996-10-12 만30 통과	actual=10565	expected=10565
+PASS	DG-18	1996-10-13 만29 세대주 막힘	actual=true	expected=true
+PASS	DG-21	기혼 7년초과 생애최초 2.4억	actual=24000	expected=24000
+PASS	DG-22	신일 가격 5000초과	actual=[["price",5000]]	expected=[["price",5000]]
+PASS	DG-23	소득 500초과	actual=[["income",500]]	expected=[["income",500]]
+PASS	DG-23-edge	경계칸 열림(nearIncomeCap)	actual=true	expected=true
+PASS	DG-23a	정밀1000 → 2억	actual=20000	expected=20000
+PASS	DG-23b	정밀1001 → 1초과	actual=[["income",1]]	expected=[["income",1]]
+PASS	DG-24	신혼 500초과	actual=[["income",500]]	expected=[["income",500]]
+PASS	DG-24a	정밀3500 → 3.2억	actual=32000	expected=32000
+PASS	DG-25	일반+생애최초신혼 둘다 3.2억, 보금자리 4억 맨위	actual=[32000,32000,"bogeumjari",40000]	expected=[32000,32000,"bogeumjari",40000]
+PASS	DG-26	현대2(4차) 가격초과 1700	actual=[["price",1700]]	expected=[["price",1700]]
+PASS	DG-27	미성년 2자녀 3.2억	actual=32000	expected=32000
+PASS	DG-28	2007-10-12생(만19) → 미성년1	actual=[["income",500],["price",9995]]	expected=[["income",500],["price",9995]]
+PASS	DG-29	2007-10-13생(만18) → 3.2억	actual=32000	expected=32000
+PASS	DG-51/Q-02	27세 결혼예정 생애최초신혼 열림 / 일반 세대주 막힘	actual=[29500,true]	expected=[29500,true]
+PASS	DG-52/Q-01	32세 결혼예정 → 일반 기본 티어	actual=["기본",20000]	expected=["기본",20000]
+PASS	DG-31	벽산 85 신생아만 4억	actual=[["newborn"],40000]	expected=[["newborn"],40000]
+PASS	DG-32	한화 4억/현금	actual=[40000,48500]	expected=[40000,48500]
+FAIL	DG-33/F-09	서울가든 면적 표시값	actual=["0.9200000000000017㎡"]	expected=["0.92㎡"]	# F-09
+PASS	DG-34	롯데 가격 250초과	actual=[["price",250]]	expected=[["price",250]]
+PASS	DG-35	외벌이 1.2억	actual=40000	expected=40000
+PASS	DG-36	합 1.3억 통과	actual=true	expected=true
+PASS	DG-36a	1인 1000초과, 통과0	actual=[[["perPerson",1000]],0,"newborn"]	expected=[[["perPerson",1000]],0,"newborn"]
+PASS	DG-37	합1.35억 맞벌이	actual="맞벌이"	expected="맞벌이"
+PASS	DG-37a	정밀0 → 외벌이	actual="외벌이"	expected="외벌이"
+PASS	DG-41	2024-09-30 신생아 아님	actual=false	expected=false
+FAIL	DG-42/F-05	2024-10-05 신생아 아님(규칙)	actual=true	expected=false	# F-05: true면 재현
+FAIL	DG-42b/F-05	2024-10-01 신생아 아님(규칙)	actual=true	expected=false
+PASS	DG-43	2024-10-13 신생아	actual=true	expected=true
+PASS	DG-45	미래 출생	actual=false	expected=false
+PASS	DG-61	청년 3억, 보금자리 위, 일반 초과	actual=[30000,"bogeumjari",[["income",1000],["price",29995]]]	expected=[30000,"bogeumjari",[["income",1000],["price",29995]]]
+PASS	DG-62	40세 청년 미통과 사유	actual=["주택드림 통장 청약당첨 + 통장 연계","만 39세 이하"]	expected=["주택드림 통장 청약당첨 + 통장 연계","만 39세 이하"]
+PASS	DG-63	신혼 청년 LTV 3억6497	actual=[36497,40000]	expected=[36497,40000]
+PASS	DG-64	7100 통과0	actual=0	expected=0
+PASS	DG-65	28세 청년 세대주 막힘	actual=["세대주"]	expected=["세대주"]
+PASS	DG-71..73	DTI 600/800/1000	actual=[7116,9488,10565]	expected=[7116,9488,10565]
+PASS	DG-74	didimdolDtiLimit	actual=[59297,57186]	expected=[59297,57186]
+PASS	DG-75	2110	actual=25023	expected=25023
+PASS	DG-76	음수 아님	actual=0	expected=0
+PASS	DG-77	역산=정산	actual=[0.6,0]	expected=[0.6,0]
+PASS	DG-78	DTI 20.24%, 월84	actual=[20.24,84]	expected=[20.24,84]
+PASS	DG-79	소득0 → null	actual=null	expected=null
+PASS	DG-83	region 항 없음	actual=["ltv","dti","cap"]	expected=["ltv","dti","cap"]
+PASS	BJ-01	보금자리 카드	actual=[16065,36000]	expected=[16065,36000]
+PASS	BJ-02	방법 아니오	actual=[10565,"ltv"]	expected=[10565,"ltv"]
+PASS	BJ-03	방법 네	actual=16065	expected=16065
+PASS	BJ-04	신용1000 DSR60	actual=[41939,"ltv"]	expected=[41939,"ltv"]
+PASS	BJ-05/Q-03	28세 보금자리 3.6억	actual=36000	expected=36000
+PASS	BJ-06	7100 초과	actual=[["income",100]]	expected=[["income",100]]
+PASS	BJ-07	신혼 9500 4억	actual=[40000]	expected=[40000]
+PASS	BJ-12	소득800 보금자리	actual=8584	expected=8584
+PASS	BJ-13	이자만 5.5%, 스트레스 없음	actual=41939	expected=41939
+PASS	BJ-15	예상 원리금 1억6065 → 월75	actual=75	expected=75
+FAIL	BK-21/F-01	예비배우자 은행 DSR 미합산(규칙 2억41만)	actual=40082	expected=20041	# F-01: 40082면 재현
+FAIL	N-01	기혼이 은행 '본인 소득만' → 정부 결혼 답 유지돼야	actual=[null,null,false]	expected=["married",true,true]	# null이면 정부 답이 지워진다
+PASS	BK-31	notHead / 2억41	actual=["notHead",20041,0.4]	expected=["notHead",20041,0.4]
+PASS	BK-32	unknown	actual="unknown"	expected="unknown"
+PASS	BK-33	생애최초면 null	actual=null	expected=null
+PASS	BK-34	8억800 → 40% 3억2320	actual=[0.4,32320,null]	expected=[0.4,32320,null]
+PASS	BK-35	금호타운 정밀 4억5092	actual=45092	expected=45092
+PASS	BK-36	9100 → 은행 3억2000(정밀 best)	actual=[32000,"bank"]	expected=[32000,"bank"]	# 다른 상품이 best면 문서 전제가 다름
+PASS	BK-37	ceilingAt 9천 지점	actual=45092	expected=45092
+PASS	BK-41..48	부채 7종 DSR	actual=[16471,16471,18976,20041,17411,15866,15866,12296]	expected=[16471,16471,18976,20041,17411,15866,15866,12296]
+PASS	BK-49	소득1000 신용2000 → 0	actual=0	expected=0
+PASS	BK-51	종류없음 285	actual=285	expected=285
+FAIL	BK-63/F-14	은행만 본인소득 → 라벨 인정소득	actual="인정소득 (부부합산)"	expected="인정소득"
+PASS	BK-64	은행 소득 최대 3억	actual=30000	expected=30000
+PASS	ST-21	P-담보	actual=[15500,47438,20000,"ltv"]	expected=[15500,47438,20000,"ltv"]
+PASS	ST-22	P-DTI	actual=[9488,"dti",13462]	expected=[9488,"dti",13462]
+PASS	ST-23	P-은행	actual=[43640,20041,60000,"dti"]	expected=[43640,20041,60000,"dti"]
+FAIL	ST-24/F-07	주택담보 1천 → DTI 그대로(규칙)	actual=8432	expected=9488	# F-07: 8432면 재현
+PASS	ST-25	신용 1천	actual=8432	expected=8432
+PASS	ST-28	예상 원리금	actual=[65,96,75]	expected=[65,96,75]
+PASS	ST-31	P-담보+신용 → inert	actual=true	expected=true
+PASS	ST-32	P-DTI 손잡이 보임, 소득최대 6000	actual=[false,6000]	expected=[false,6000]
+PASS	ST-33	신용 0까지	actual=9488	expected=9488
+PASS	ST-34	소득 3000 → 담보	actual=[10565,"ltv"]	expected=[10565,"ltv"]
+PASS	ST-35	6000 끝, 게이지 천장	actual=[10565,16065]	expected=[10565,16065]
+PASS	ST-37	전세6억 DTI 7827, 소득칸 상한	actual=[7827,"dti",0]	expected=[7827,"dti",0]
+FAIL	ST-42/F-03	담보 벽이면 inert(규칙)	actual=[43640,"ltv",false]	expected=[43640,"ltv",true]	# F-03: leversInert=false면 재현
+PASS	ST-42b	소득 1.2억 올려도 그대로	actual=43640	expected=43640
+PASS	ST-43	금호타운 서민 60% 4억2500, inert	actual=[42500,"ltv",true]	expected=[42500,"ltv",true]
+FAIL	ST-51/F-04	소득 최대(규칙 1억4500)	actual=[35578,"dti",20000]	expected=[35578,"dti",14500]	# F-04: 20000이면 재현
+FAIL	ST-51b/F-04	1.5억 가정: 방법화면 vs 목록 같은 상품?	actual=["newborn",40000,"bankMortgage",35400]	expected="(predicate)"	# 방법=newborn 40000 / 목록=bankMortgage 35400
+PASS	ST-53	범위 안 뒤집힘	actual=[9000,9000]	expected=[9000,9000]
+PASS	ST-54	미혼 가정소득 → 본인	actual=[7000,0,false]	expected=[7000,0,false]
+PASS	ST-62	P-담보 네 → cap 2억	actual=[20000,"cap"]	expected=[20000,"cap"]
+FAIL	ST-71/F-06	매물 교체 후 pickedKey=null → 상품	actual="bogeumjari"	expected="bankMortgage"	# F-06: bogeumjari면 재현
+PASS	X-34	judgeUnit 결정적	actual=true	expected=true
+PASS	X-35	목록 − 방법 = 5,500(은행 담보 벽)	actual=5500	expected=5500
+PASS	IC-01	estimated 그룹 없음 / 원문 2종 보존	actual=[false,2]	expected=[false,2]
+FAIL	IC-11/F-08	swing20=네 → 후속 보임 (현재 코드식 condition.답)	actual=["swing20"]	expected=["swing20","swingSteady"]	# F-08
+PASS	IC-11/F-08-fix	같은 식에 condition.answer를 쓰면	actual=["swing20","swingSteady"]	expected=["swing20","swingSteady"]
+PASS	IC-19	effectiveDate 전부 null	actual=true	expected=true
+
+112/127 pass, 15 fail

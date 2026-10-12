@@ -1,0 +1,15 @@
+FAIL	N-02	같은 '아니오' 화면인데 다른 매물 숫자가 같아야	actual=[49140,43640]	expected="(predicate)"	# 처음=49140 / 네→아니오 후=43640
+PASS	N-02b	방법 화면 숫자는 둘 다 같다	actual=[43640,43640]	expected="(predicate)"
+FAIL	N-03	네 상태: 벽=DTI면 손잡이가 보여야	actual=["dti",17789,true]	expected="(predicate)"	# binding=dti limit=17789 inert=true parts={"ltv":21000,"dti":17789,"cap":20000}
+FAIL	N-03b	소득을 올리면 실제로 열리는 폭	actual=2211	expected="(predicate)"	# 열리는 폭 2211만 (숨긴 손잡이로 얻을 수 있던 값)
+FAIL	N-04	결혼 미답인데 personReady	actual=[false,true,true]	expected=[false,false,false]	# bankReady=true면 정부 답 일부로 은행이 '완료'된다
+PASS	N-04b	그 시점 목록 숫자	actual=[16065,"bogeumjari"]	expected="(predicate)"	# 정밀 숫자 16065 (bogeumjari), 대략이면 3680
+FAIL	N-05	만 11세 단독 → 열리는 상품 없어야	actual=["bogeumjari","bankMortgage"]	expected=[]	# 성년 요건 미검사
+FAIL	N-05b	만 16세 + 자녀 → 일반가구 세대주 통과?	actual=["bogeumjari","bankMortgage","general","newborn"]	expected="(predicate)"	# 통과: bogeumjari,bankMortgage,general,newborn
+FAIL	N-06	youthDream requires (문서: 무주택·통장·39세)	actual=["noHome","householdHead","hasDreamAccount","under39"]	expected=["noHome","hasDreamAccount","under39"]
+FAIL	N-07	다시 묻지 않고 처분조건부로 자동 선택?	actual="dispose"	expected=null	# dispose면 사용자가 다시 확인하지 않은 처분 약정이 살아 있다
+PASS	N-08	보금자리 카드 vs 방법 화면 기본	actual=[36000,33910]	expected="(predicate)"	# 카드 36000 / 방법 기본 33910
+PASS	N-09	결혼예정인데 배우자 있음	actual=[true,"planned"]	expected=[true,"planned"]
+PASS	N-10	가정 +900을 배우자 몫으로 → dualIncome	actual=[true,12000]	expected="(predicate)"	# dualIncome=true max1인=12000
+
+5/13 pass, 8 fail
