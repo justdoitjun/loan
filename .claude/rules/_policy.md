@@ -19,4 +19,4 @@
 | 기타부채 추정금리 | 5.34% | `ESTIMATED_DEBT_RATE` | 한은 가계대출 가중평균 + 1%p. **매달 갱신 대상** |
 | 지역별 주담대 cap | 15억 이하 6억 · 15~25억 4억 · 25억 초과 2억 (지방 제한 없음) | `REGION_CAP` · `engine.regionCapOf` | 표는 `products/_common.md`. 은행·예산 화면 천장에 적용, 정부상품은 제한 없음 |
 
-은행 DSR(`RULE.DSR` 40% · `RULE.loanRate` 4.0% · 스트레스 1.5%p · `RULE.creditRate` 5.5% · `RULE.creditYears` 5년)은 `products/bank/bank.md` 3절이 단일 출처다. 예산 화면 천장과 보금자리(임시)도 같은 `RULE` 값을 읽는다.
+은행 DSR(`RULE.DSR` 40% · `RULE.loanRate` 4.0% · 스트레스 3%p · `RULE.creditRate` 5.5% · `RULE.creditYears` 5년)은 `products/bank/bank.md` 3절이 단일 출처다. 예산 화면 천장과 보금자리(임시)도 같은 `RULE` 값을 읽는다.

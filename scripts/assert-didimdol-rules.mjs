@@ -220,7 +220,7 @@ function grab(section, re) {
   else if (Math.abs(annual("minus", 1000) - creditLike) > 1e-9) fail("마이너스", String(annual("minus", 1000)));
   else if (Math.abs(annual("credit", 1000) - creditLike) > 1e-9) fail("신용", String(annual("credit", 1000)));
   else if (Math.abs(annual("jeonse", 1000) - interest) > 1e-9) fail("전세 이자", String(annual("jeonse", 1000)));
-  else ok("마이너스통장은 신용과 같다. 이자는 실제 금리 + 스트레스 금리 (1,000만 → 270만)");
+  else ok(`마이너스통장은 신용과 같다. 이자는 실제 금리 + 스트레스 금리 (1,000만 → ${creditLike}만)`);
   if (autoSpec.method !== "principal" || autoSpec.years !== 3) fail("자동차", JSON.stringify(autoSpec));
   else if (Math.abs(annual("auto", 3000) - 1000) > 1e-9) fail("자동차", String(annual("auto", 3000)));
   else ok("자동차는 원금 ÷ 3년 (3,000만 → 1,000만)");

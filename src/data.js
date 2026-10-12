@@ -96,14 +96,14 @@ export const PRODUCTS = {
   },
   /* 은행 일반 주담대 — 출처 .claude/rules/products/bank/bank.md. 숫자는 전부 ⚠️ 가정치.
        ratio/calcRate/years = DSR 잣대(engine.repaymentCapacity): 차주단위 40% · 산정만기 30년.
-       calcRate = 본건 실제 금리 가정. stressRate = 신규 취급시점 스트레스 금리(1.5%p). 둘은 다른 숫자다.
+       calcRate = 본건 실제 금리 가정. stressRate = 신규 취급시점 스트레스 금리(3%p). 둘은 다른 숫자다.
        연간 이자와 본건 원리금균등은 (calcRate + stressRate)로 산정한다. 화면 금리(rateLabel)에는 더하지 않는다.
        cap: null = 상품 자체 한도가 없다 → 그 자리는 지역별 cap이 대신 건다(regionCapped: true → REGION_CAP).
        offsetsRoomDeduction: true = MCI 가입으로 방공제 상쇄.
        capacityModel 없음 = 은행 DSR(보수적 기본값). DEBT_VIEW.bank(products/limit.js)가 부채를 원리금으로 본다. */
   bank: {
     key: "bank", name: "일반 주택담보대출", rateLabel: "연 4%대",
-    calcRate: RULE.loanRate, stressRate: 0.015, ratio: RULE.DSR, years: RULE.loanYears,
+    calcRate: RULE.loanRate, stressRate: 0.03, ratio: RULE.DSR, years: RULE.loanYears,
     /* LTV 폴백 = 일반차주. 실제 비율은 ltvFromTable → engine.regulatoryLtv (bank.md 1절). */
     LTV: LTV_TABLE[REGION].noHome, ltvFromTable: true, offsetsRoomDeduction: true, cap: null, regionCapped: true, leadTime: "약 2~4주",
   },
