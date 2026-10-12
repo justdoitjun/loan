@@ -121,7 +121,7 @@ export default function App() {
             <button key={r.id} onClick={() => setIncomeAsk(r)} style={listItem}>
               <div>
                 <div style={{ fontSize: 15, color: C.ink, fontWeight: 700 }}>{r.name}</div>
-                <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 2 }}>전용 {r.areaM2}㎡ · 시세 {eok(r.price)}</div>
+                <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 2 }}>전용 {r.areaM2}㎡ · 평균 실거래가 {eok(r.price)}</div>
                 <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 3 }}>필요 현금 {won(r.cashNeeded)}원</div>
               </div>
               <span style={{ fontSize: 15, color: C.greenDeep, fontWeight: 800, textAlign: "right", flex: "0 0 auto" }}>
