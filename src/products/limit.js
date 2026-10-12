@@ -4,18 +4,19 @@
    — 디딤돌은 DTI, 은행 계열은 DSR로 갈린다.
 
    레버 값(lever)의 모양 — 이게 이 인터페이스의 계약이다:
-     { price, income, incomeMax, debt, debts, offsetRoom }
+     { price, income, incomeMax, debt, debts, offsetRoom, ltv }
        price      담보 시세 (만원)             · 고정
-       income     가정 인정소득 (만원)          · 소득 레버
+       income     가정 인정소득 (만원)          · 소득 레버. 은행 서민 행도 이 소득으로 본다
        incomeMax  소득 레버가 갈 수 있는 최대     · 천장 계산에 씀
        debt       종류별 금액의 합계 (만원)      · debts와 같다. 합계만 보는 호출용
        debts      { [DEBT_KINDS.key]: 금액 }   · 종류별. 없으면 debt 숫자를 쓴다
        offsetRoom 방공제 상쇄 여부              · null = 상품 기본값. true면 안 빼고, false면 뺀다
+       ltv        은행 규제 LTV 플래그          · 없으면 일반차주. 소득·가격은 위 필드를 쓴다
    월상환액은 묻지도 넘기지도 않는다.
    은행의 종류별 연 상환액은 engine_bank_dsr.js가 잔액을 해석한다. 여기선 raw 부채를 넘긴다.
    돌려주는 것: { limit, parts, binding } — limitParts와 같은 모양. */
-import { PRODUCTS } from "../data.js";
-import { limitParts } from "../engine.js";
+import { PRODUCTS, REAL_DEMAND } from "../data.js";
+import { limitParts, regulatoryLtv } from "../engine.js";
 
 /* 기존 부채를 어떤 잣대로 보는가 — DSR 계열 상품에만 해당한다.
    ⚠️ 디딤돌은 여기 없다. 디딤돌은 DSR이 아니라 DTI식(engine.didimdolDtiLimit)으로 계산하고,
@@ -28,14 +29,27 @@ const viewOf = (key) => DEBT_VIEW[key] ?? "principalAndInterest";
 /* 지금 레버 위치에서 닿는 한도.
    종류별 금액(debts)을 raw로 넘긴다. 합계로 볼지, 나중에 종류별로 가를지는 engine이 한다.
    debts가 없으면 debt 숫자 하나를 쓴다. */
+function ltvRateOf(productKey, lever) {
+  if (!PRODUCTS[productKey].ltvFromTable) return null;
+  return regulatoryLtv({ ...(lever.ltv || {}), income: lever.income, price: lever.price }).rate;
+}
+
 export function limitAt(productKey, lever, capOverride = null) {
   const debt = { balance: lever.debt ?? 0, debts: lever.debts ?? null, view: viewOf(productKey) };
-  return limitParts(PRODUCTS[productKey], lever.price, lever.income, debt, capOverride, lever.offsetRoom);
+  return limitParts(PRODUCTS[productKey], lever.price, lever.income, debt, capOverride, lever.offsetRoom, ltvRateOf(productKey, lever));
 }
 
 /* 두 레버를 끝까지 당겼을 때(부채 0 · 소득 상한) = '정직한 천장'.
    이 위 구간은 레버로도 지금은 무리다. 거짓 희망을 만들지 않기 위해 반드시 같이 그린다.
    debts를 빈 객체로 비운다. debt만 0으로 두면 종류별 잔액이 합계에 남는다. */
 export function ceilingAt(productKey, lever, capOverride = null) {
-  return limitAt(productKey, { ...lever, debt: 0, debts: {}, income: lever.incomeMax }, capOverride);
+  /* 은행은 소득이 서민 상한(9천만)을 넘으면 LTV가 40%로 떨어진다.
+     천장은 슬라이더 끝이 아니라, 부채 0에서 한도가 가장 커지는 소득이다.
+     서민 행이 살아 있는 구간은 상한 이하에서 소득이 높을수록 DSR만 늘므로, 상한과 최댓값 두 점만 보면 된다. */
+  const incomes = [lever.incomeMax];
+  const cap = REAL_DEMAND.incomeCap;
+  if (PRODUCTS[productKey].ltvFromTable && lever.income <= cap && cap < lever.incomeMax) incomes.push(cap);
+  return incomes
+    .map((income) => limitAt(productKey, { ...lever, debt: 0, debts: {}, income }, capOverride))
+    .reduce((a, b) => (b.limit > a.limit ? b : a));
 }

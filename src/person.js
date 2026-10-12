@@ -16,7 +16,7 @@
      IncomeCheck  → incomeCheck(소득 신뢰도 자가진단)
      소득 화면     → ownIncome */
 import { LEVER, DEBT_KINDS } from "./data.js";
-import { ageOf, spouseIncomeOf, debtTotal } from "./engine.js";
+import { ageOf, spouseIncomeOf, debtTotal, buildCtx, deriveFacts } from "./engine.js";
 
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
@@ -33,7 +33,7 @@ export const EMPTY_ELIG = {
 
   /* ── 단일 질문 ── */
   homeCount: null,        // 0 = 무주택(진입 게이트) · 1 · 2(이상). 정부탭은 네/아니오(0/1), 은행탭은 4버킷(0/1/2)으로 채운다
-  disposeExisting: null,  // homeCount=1일 때만: 처분조건부면 true(LTV 70%), 유지면 false(수도권 LTV 0%). 은행탭만 묻는다
+  disposeExisting: null,  // homeCount=1일 때만: 처분조건부면 true(규제지역 일반차주 LTV), 유지면 false(LTV 0%). 은행탭만 묻는다
   firstTime: null,        // 생애최초 — "한 번도 소유한 적 없다". 무주택("지금 없다")과 다른 개념
   marital: null,          // "married" | "planned" | "single"  ← 4버킷이 이 둘로 매핑된다
   marriedWithin7: null,   // marital="married"일 때만: 혼인신고 7년 이내면 true → 신혼가구
@@ -103,8 +103,9 @@ export function eligSteps(elig) {
 export const eligReady = (elig) => eligSteps(elig).ready;
 
 /* ── 은행탭 진행 상태 (products/bank/bank.md 1절) ──
-   질문은 둘뿐: ① 주택 보유 상태 → ② 배우자 소득(DSR 합산). 정부탭과 같은 elig 필드를 쓴다 —
-   한쪽에서 답한 무주택·배우자·소득 밴드는 다른 쪽에서 다시 묻지 않는다. */
+   ① 주택 보유 상태 → ② 무주택이면 생애최초(LTV 40%↔70%) → ③ 배우자 소득(DSR 합산).
+   정부탭과 같은 elig 필드를 쓴다. 한쪽에서 답한 무주택·생애최초·소득 밴드는 다른 쪽에서 다시 묻지 않는다.
+   세대주는 여기서 묻지 않는다. 가족정보가 있을 때만 서민·실수요 행을 준다. */
 export const homeBucketOf = (elig) => {
   if (elig.homeCount === 0) return "none";
   if (elig.homeCount === 1) return elig.disposeExisting === true ? "dispose" : elig.disposeExisting === false ? "keep" : null;
@@ -115,10 +116,12 @@ export function bankSteps(elig) {
   const bucket = homeBucketOf(elig);
   const homeReady = bucket !== null;
   const open = bucket === "none" || bucket === "dispose";          // 그 외는 LTV 0% → 닫힘
-  const askIncome = homeReady && open;
+  const askFirstTime = homeReady && bucket === "none";
+  const firstTimeReady = !askFirstTime || elig.firstTime !== null;
+  const askIncome = homeReady && open && firstTimeReady;
   /* 배우자 있음 → 밴드까지 있어야 소득이 정해진다. 없음 → 본인 소득만. */
   const spouseReady = elig.hasSpouse === false || (elig.hasSpouse === true && elig.spouseBand !== null);
-  return { bucket, homeReady, open, askIncome, spouseReady, ready: askIncome && spouseReady };
+  return { bucket, homeReady, open, askFirstTime, firstTimeReady, askIncome, spouseReady, ready: askIncome && spouseReady };
 }
 export const bankReady = (elig) => bankSteps(elig).ready;
 
@@ -222,6 +225,7 @@ export function leverOf(person, price, incomeCap = null, pulled = true) {
     const raw = pull?.debts && pull.debts[k.key] != null ? Number(pull.debts[k.key]) : ceiling;
     debts[k.key] = clamp(Number.isFinite(raw) ? raw : ceiling, 0, ceiling);
   }
+  const facts = deriveFacts(buildCtx({ unit: { price, areaM2: 0 }, ownIncome: person.ownIncome, elig: person.elig }));
   return {
     price,
     income: clamp(pull?.income ?? income, income, incomeMax),
@@ -230,5 +234,15 @@ export function leverOf(person, price, incomeCap = null, pulled = true) {
     debt: debtTotal(debts),
     /* null = 상품이 정한 방공제. true/false는 전략 화면에서 켠 값만. */
     offsetRoom: pull && typeof pull.offsetRoom === "boolean" ? pull.offsetRoom : null,
+    /* 은행 LTV 행. 소득·가격은 레버 값이 따로 들어가므로 여기 넣지 않는다. */
+    ltv: {
+      firstTime: facts.firstTime,
+      noHome: facts.noHome,
+      disposing: facts.disposing,
+      oneHome: facts.oneHome,
+      multiHome: facts.multiHome,
+      householdHead: facts.householdHead,
+      householdHeadKnown: facts.householdHeadKnown,
+    },
   };
 }

@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node scripts/assert-didimdol-rules.mjs",
+    "test": "node scripts/assert-ltv.mjs && node scripts/assert-didimdol-rules.mjs",
     "fetch-units": "node scripts/fetch-units.mjs",
     "build-geo": "node scripts/build-geo-code.mjs"
   },

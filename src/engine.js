@@ -1,7 +1,7 @@
 /* 계산 로직 한 곳. 화면(JSX)을 넣지 말 것.
    여러 페이지가 여기서만 import 한다 — 파일마다 다시 정의하면 규칙이 갈라진다.
    역할 분담: 상품 '규칙 데이터'는 src/products/*, 그 데이터를 읽는 '판정·계산'은 여기. */
-import { RULE, REGION, REGION_CAP, PRODUCTS, DEBT_KINDS, SPOUSE_INCOME_BANDS, INCOME_EDGE_MARGIN, ESTIMATED_DEBT_RATE, DIDIMDOL_LOAN_RATE, DIDIMDOL_DTI } from "./data.js";
+import { RULE, REGION, REGION_CAP, LTV_TABLE, REAL_DEMAND, PRODUCTS, DEBT_KINDS, SPOUSE_INCOME_BANDS, INCOME_EDGE_MARGIN, ESTIMATED_DEBT_RATE, DIDIMDOL_LOAN_RATE, DIDIMDOL_DTI } from "./data.js";
 import { PRODUCT_RULES, NEWBORN_RULE, NEWLYWED_YEARS, WEDDING_SOON_MONTHS } from "./products/index.js";
 import { bankExistingAnnual } from "./engine_bank_dsr.js";
 
@@ -164,6 +164,42 @@ export function didimdolDtiAt(didimdolAmount, annualIncome, otherDebtBalance, op
    표는 data.REGION_CAP 하나 — 여기서 숫자를 다시 적지 않는다. 은행 한도와 소득 화면 천장이 같이 읽는다. */
 export const regionCapOf = (price) => REGION_CAP.find((b) => price <= b.upTo)?.cap[REGION] ?? null;
 
+/* 은행 규제 LTV 행. 표는 data.LTV_TABLE, 서민 요건은 data.REAL_DEMAND.
+   여러 행에 맞으면 비율이 높은 쪽. 맞는 행이 없으면 그 지역 일반차주(무주택).
+   디딤돌·보금자리는 부르지 않는다 — 그 상품은 PRODUCTS[key].LTV를 쓴다.
+   s: { firstTime, noHome, disposing, oneHome, multiHome, householdHead, householdHeadKnown, income, price } */
+export function regulatoryLtv(s = {}) {
+  const row = LTV_TABLE[REGION];
+  const income = num(s.income);
+  const price = num(s.price);
+  const realDemand = !!s.noHome && !!s.householdHeadKnown && !!s.householdHead
+    && income <= REAL_DEMAND.incomeCap && price <= REAL_DEMAND.priceCap;
+  const hits = [
+    { key: "firstTime", label: "생애최초", on: !!s.firstTime && !!s.noHome },
+    { key: "realDemand", label: "서민·실수요", on: realDemand },
+    { key: "noHome", label: "일반차주", on: !!s.noHome },
+    { key: "disposing", label: "일반차주", on: !!s.disposing },
+    { key: "oneHome", label: "1주택", on: !!s.oneHome && !s.disposing },
+    { key: "multiHome", label: "2주택 이상", on: !!s.multiHome },
+  ].filter((h) => h.on);
+  const picked = hits.reduce((a, b) => (row[b.key] > row[a.key] ? b : a), hits[0]);
+  const key = picked?.key ?? "noHome";
+  return { key, label: picked?.label ?? "일반차주", rate: row[key] };
+}
+
+/* 서민 60%가 가격·소득·무주택은 맞는데 세대주만 비는 경우.
+   null | "unknown"(가족정보 없음) | "notHead"(추정 결과 세대주 아님).
+   생애최초 70%가 이미 더 높으면 null — 그 길을 다시 말하지 않는다. */
+export function realDemandHeadGap(s = {}) {
+  const row = LTV_TABLE[REGION];
+  if (!s.noHome) return null;
+  if (s.firstTime && row.firstTime >= row.realDemand) return null;
+  if (num(s.income) > REAL_DEMAND.incomeCap || num(s.price) > REAL_DEMAND.priceCap) return null;
+  if (!s.householdHeadKnown) return "unknown";
+  if (!s.householdHead) return "notHead";
+  return null;
+}
+
 /* 필요 현금 = 시세에서 대출을 뺀 나머지. 대출이 시세를 넘으면 0 — 현금은 입력이 아니라 이 결과다. */
 export const cashNeededOf = (price, loan) => Math.max(num(price) - Math.max(num(loan), 0), 0);
 
@@ -195,10 +231,14 @@ export function evaluate(unit, dsrCap) {
    이자만 보는 상품(보금자리 임시)은 합계에 annualDebtService interestOnly를 쓴다.
    상환능력을 어떤 식으로 볼지는 상품 데이터(capacityModel · view)가 정한다.
    productKey로 분기하지 말 것. fundDTI = 디딤돌 DTI. 원리금 view = 은행 종류별 DSR. */
-export function limitParts(p, price, income, debt = null, capOverride = null, offsetRoom = null) {
-  /* null = 상품 기본값. 전략 화면의 방공제 스위치만 true/false로 덮어쓴다. */
+export function limitParts(p, price, income, debt = null, capOverride = null, offsetRoom = null, ltvRate = null) {
+  /* null = 상품 기본값. 전략 화면의 방공제 스위치만 true/false로 덮어쓴다.
+     ltvRate는 은행 규제 표(regulatoryLtv)가 고른 비율. null이면 상품 LTV.
+     0도 유효한 비율(1주택 유지·다주택)이라 null만 폴백으로 본다. */
   const offset = offsetRoom == null ? p.offsetsRoomDeduction : offsetRoom;
-  const ltv = Math.max(price * p.LTV - (offset ? 0 : RULE.roomDeduction), 0);
+  const rate = ltvRate == null ? p.LTV : ltvRate;
+  const ltvPct = Math.round(rate * 100);
+  const ltv = Math.max(price * rate - (offset ? 0 : RULE.roomDeduction), 0);
   const balance = combinedDebtBalance(debt);
 
   /* 디딤돌: DTI(합계 × 이자). 이자만 보는 상품: 합계 × 금리.
@@ -220,7 +260,7 @@ export function limitParts(p, price, income, debt = null, capOverride = null, of
   const cap = capOverride ?? p.cap;                              // null = 상품 자체 한도 없음
   const region = p.regionCapped ? regionCapOf(price) : null;     // null = 지역 제한 없음
   const parts = [
-    { key: "ltv", label: offset ? "담보(LTV · 방공제 상쇄)" : "담보(LTV - 방공제)", value: ltv },
+    { key: "ltv", label: offset ? `담보(LTV ${ltvPct}% · 방공제 상쇄)` : `담보(LTV ${ltvPct}% − 방공제)`, value: ltv },
     { key: "dti", label: fund ? "상환능력(DTI)" : `상환능력(DSR ${Math.round(p.ratio * 100)}%)`, value: capacity },
     cap != null && { key: "cap", label: "정책상 최대한도", value: cap },
     region != null && { key: "region", label: "지역별 주담대 한도", value: region },
@@ -324,7 +364,9 @@ export function deriveFacts(ctx) {
     maxPersonIncome: Math.max(ctx.ownIncome || 0, ctx.spouseIncome || 0),
     /* 플래그 */
     noHome: ctx.homeCount === 0,
-    /* 은행 LTV 표의 행(products/_common.md). 1주택은 '처분조건부'냐로 70%/0%가 갈린다 — disposeExisting은 은행탭만 묻는다. */
+    /* 은행 LTV 표의 행(products/_common.md). 규제지역 일반차주는 40%, 유지는 0%.
+       disposeExisting은 은행탭만 묻는다. householdHeadKnown은 가족정보가 다 찼는가 —
+       비어 있으면 서민·실수요 60%를 주지 않는다. */
     oneHome: ctx.homeCount === 1,
     multiHome: ctx.homeCount >= 2,
     disposing: ctx.homeCount === 1 && ctx.disposeExisting === true,
@@ -334,6 +376,8 @@ export function deriveFacts(ctx) {
     weddingSoon,
     hasDependents, sole, adult30Plus, householdHead, soleException30Under,
     adult30SoleSingle,
+    householdHeadKnown: age !== null && age >= 0 && ctx.hasSpouse !== null
+      && (ctx.birthdays || []).every((d) => { const a = ageOf(d); return a !== null && a >= 0; }),
     minors, twoPlusMinors: minors >= 2,
     hasNewborn,
     dualIncome: (ctx.spouseIncome || 0) > 0,
@@ -407,7 +451,9 @@ export function judgeRule(rule, f) {
    debt=null → 무부채 가정. 상환능력 식(디딤돌 DTI / 은행 DSR)은 상품 데이터가 고른다.
    parts·binding까지 돌려준다 — 카드가 "무엇이 벽인가"를 부채 입력 전에도 말할 수 있게. */
 export function roughLimit(judged, f) {
-  return limitParts(PRODUCTS[judged.product], f.price, f.income, null, judged.limit);
+  const p = PRODUCTS[judged.product];
+  const ltvRate = p.ltvFromTable ? regulatoryLtv(f).rate : null;
+  return limitParts(p, f.price, f.income, null, judged.limit, null, ltvRate);
 }
 
 /* 판정 대상 규칙 묶음 → { passed(대략 한도 높은 순), others(근접 순), all }.

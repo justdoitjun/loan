@@ -83,8 +83,9 @@
 
 - 계산은 `engine.js`에만. 화면 파일에서 같은 식을 다시 쓰지 않는다.
 - 프론트 데이터는 `data.js`·`src/data/seoul/`·`src/data/geo/`·`products/*`에만. **로직(함수)을 데이터 파일에 넣지 않는다.** 시세의 원본은 테이블 1·2이고, `src/data/seoul/`은 테이블 2의 export다.
-- 자격 상한(소득·가격·면적·한도)은 `products/*`가 유일한 출처, 금융 파라미터(금리·LTV·cap·실행시점)는
-  `data.PRODUCTS`가 유일한 출처. 같은 숫자를 두 곳에 두지 않는다.
+- 자격 상한(소득·가격·면적·한도)은 `products/*`가 유일한 출처, 금융 파라미터(금리·cap·실행시점)는
+  `data.PRODUCTS`가 유일한 출처. 은행 LTV 비율은 `data.LTV_TABLE`이고 차주 행은 `engine.regulatoryLtv`가 고른다.
+  예산 화면 `RULE.LTV`는 그 지역 일반차주(무주택) 행이다. 디딤돌·보금자리 LTV는 `PRODUCTS`에 둔다. 같은 숫자를 두 곳에 두지 않는다.
 - 컨텍스트는 `engine.buildCtx()`가 만든 객체 하나(`ctx`)로만 흐른다. 화면이 상태를 복제하지 않는다.
 - 자격 판정 결과는 들고 다니지 않고 `deriveFacts(ctx) → judgeAll(facts)`로 그때그때 다시 계산한다.
 

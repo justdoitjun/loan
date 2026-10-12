@@ -4,13 +4,14 @@
    갈리는 건 진입 조건(주택 보유 상태 = LTV 표의 행)뿐이고, 금액은 Min(LTV, DSR, 지역별 cap)이 정한다
    (금융 파라미터는 data.PRODUCTS.bank, 지역별 cap은 data.REGION_CAP).
 
-   플래그(engine.deriveFacts): noHome(무주택) · disposing(1주택 처분조건부) → LTV 70%
-                              oneHome & !disposing(1주택 유지) · multiHome(2주택+) → 수도권 LTV 0% = 닫힘 */
+   플래그(engine.deriveFacts): noHome · disposing → 열림. LTV 비율은 engine.regulatoryLtv
+     (규제지역: 생애최초 70% · 서민·실수요 60% · 일반차주 40%).
+     oneHome & !disposing · multiHome → 규제지역 LTV 0% = 닫힘 */
 export const BANK_RULES = [
   {
     key: "bankMortgage", product: "bank", name: "일반 주택담보대출", enabled: true,
     requires: [
-      { flags: [["noHome", "disposing"]], label: "무주택 또는 처분조건부 1주택 (1주택 유지·다주택은 수도권 LTV 0%)" },
+      { flags: [["noHome", "disposing"]], label: "무주택 또는 처분조건부 1주택 (1주택 유지·다주택은 규제지역 LTV 0%)" },
     ],
     incomeCap: [{ when: [], value: null, label: "소득상한 없음" }],
     priceCap:  [{ when: [], value: null, label: "가격상한 없음" }],

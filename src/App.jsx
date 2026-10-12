@@ -337,7 +337,7 @@ function ProductModal({ r, onPick, onClose }) {
         </button>
         <button onClick={() => onPick("bank")} style={modalOpt}>
           <div style={{ fontSize: 15, fontWeight: 800 }}>은행대출 <span style={{ fontSize: 12, color: C.inkSoft, fontWeight: 600 }}>일반 주담대</span></div>
-          <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 3 }}>한도 넉넉 · 금리 높음 · 실행 빠름(약 2~4주)</div>
+          <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 3 }}>금리 높음 · 실행 빠름(약 2~4주)</div>
         </button>
         <button onClick={onClose} style={{ ...ghostBtn, width: "100%", marginTop: 10 }}>닫기</button>
       </div>

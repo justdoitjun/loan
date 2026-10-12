@@ -1,27 +1,29 @@
 /* 은행대출 탭 — 일반 주택담보대출. 규칙은 .claude/rules/products/bank/bank.md.
-   정부탭과 달리 '자격'이 거의 없다. 갈리는 건 담보(주택 보유 상태 = LTV 표의 행)와 상환능력(DSR 40%)이다.
-   그래서 질문은 둘뿐이다:
-     ① 주택 보유 상태  → homeCount · disposeExisting  (무주택·처분조건부 70% / 유지·다주택 0% = 닫힘)
-     ② 배우자 소득     → hasSpouse · spouseBand       (DSR 소득 합산)
-   정부탭과 같은 elig 한 벌을 쓴다 — 한쪽에서 답한 건 다른 쪽에서 다시 묻지 않는다.
-   ⚠️ 부채는 여기서 안 묻는다(DetailInfo 한 곳). 계산은 engine(limitParts/judgeAll), 진행 상태는 person.bankSteps.
-   카드는 자격보다 "무엇이 벽인가"(LTV / DSR / 지역별 한도)를 말한다 — 은행에선 그게 곧 답이다. */
+   정부탭과 달리 '자격'이 거의 없다. 갈리는 건 담보(LTV 표의 행)와 상환능력(DSR 40%)이다.
+   질문:
+     ① 주택 보유 상태  → homeCount · disposeExisting  (일반차주 40% / 유지·다주택 0% = 닫힘)
+     ② 무주택이면 생애최초 → firstTime                 (70%. 정부탭에서 답했으면 다시 안 묻는다)
+     ③ 배우자 소득     → hasSpouse · spouseBand       (DSR 소득 합산)
+   서민·실수요 60%의 세대주는 여기서 묻지 않는다. 가족정보가 있으면 추정하고, 없으면 카드에 그 길을 적는다.
+   ⚠️ 부채는 여기서 안 묻는다(DetailInfo 한 곳). 계산은 engine(limitParts/judgeAll), 진행 상태는 person.bankSteps. */
 import { useState } from "react";
-import { REGION, REGION_LABEL, C } from "../data.js";
-import { deriveFacts, judgeAll, won, eok, cashNeededOf } from "../engine.js";
+import { REGION, REGION_LABEL, LTV_TABLE, C } from "../data.js";
+import { deriveFacts, judgeAll, regulatoryLtv, realDemandHeadGap, won, eok, cashNeededOf } from "../engine.js";
 import { BANK_RULES } from "../products/index.js";
 import { bankSteps, withSpouse } from "../person.js";
 import { Section, Placeholder, eyebrow, h1, fine, pill } from "../ui.jsx";
-import { SpouseIncomeTrack, AnswersDropdown, SkippedNote } from "./shared.jsx";
+import { YesNo, SpouseIncomeTrack, AnswersDropdown, SkippedNote } from "./shared.jsx";
 
 const REGION_NAME = REGION_LABEL[REGION];
+const ROW = LTV_TABLE[REGION];
+const pct = (rate) => `${Math.round(rate * 100)}%`;
 
 /* 주택 보유 상태 4버킷 = LTV 표의 행. key는 person.homeBucketOf가 돌려주는 값과 같다. */
 const HOME_BUCKETS = [
-  { key: "none",    label: "없어요",              desc: "무주택 — LTV 70%로 봐요",                                    homeCount: 0, dispose: null },
-  { key: "dispose", label: "집이 하나 있지만, 처분할 거예요",     desc: "6개월 내 처분 및 전입조건", homeCount: 1, dispose: true },
-  { key: "keep",    label: "집이 하나 있고, 계속 갖고 있을래요",   desc: `${REGION_NAME}에선 LTV 0%`,                   homeCount: 1, dispose: false },
-  { key: "multi",   label: "집이 둘 이상 있어요",                desc: `${REGION_NAME}에선 LTV 0%`,                   homeCount: 2, dispose: null },
+  { key: "none",    label: "없어요",              desc: `무주택 — 일반 LTV ${pct(ROW.noHome)}`,                         homeCount: 0, dispose: null },
+  { key: "dispose", label: "집이 하나 있지만, 처분할 거예요",     desc: `6개월 내 처분 및 전입조건 · LTV ${pct(ROW.disposing)}`, homeCount: 1, dispose: true },
+  { key: "keep",    label: "집이 하나 있고, 계속 갖고 있을래요",   desc: `${REGION_NAME}에선 LTV ${pct(ROW.oneHome)}`,       homeCount: 1, dispose: false },
+  { key: "multi",   label: "집이 둘 이상 있어요",                desc: `${REGION_NAME}에선 LTV ${pct(ROW.multiHome)}`,      homeCount: 2, dispose: null },
 ];
 
 /* 접힌 요약. 접어도 '무엇으로 판정했는지'는 남긴다(정부탭과 같은 원칙). */
@@ -32,12 +34,15 @@ const answerRows = (elig, ctx, bucket) => {
     : ctx.spouseIncome > 0
       ? `본인 ${won(ctx.ownIncome)}원 + 예비배우자 ${won(ctx.spouseIncome)}원 (정부탭 답변)`
       : `본인 ${won(ctx.ownIncome)}원만`;
-  return [["주택 보유", home ? home.label : "—"], ["소득", spouse]];
+  const rows = [["주택 보유", home ? home.label : "—"]];
+  if (bucket === "none") rows.push(["생애최초", elig.firstTime ? "네" : "아니오"]);
+  rows.push(["소득", spouse]);
+  return rows;
 };
 
 export default function Bank({ ctx, elig, setElig, onPick }) {
   const facts = deriveFacts(ctx);
-  const { bucket, homeReady, open, askIncome, ready } = bankSteps(elig);
+  const { bucket, homeReady, open, askFirstTime, askIncome, ready } = bankSteps(elig);
 
   const pickHome = (b) => setElig((s) => ({ ...s, homeCount: b.homeCount, disposeExisting: b.dispose }));
   const setHasSpouse = (v) => setElig((s) => withSpouse(s, v));
@@ -70,7 +75,15 @@ export default function Bank({ ctx, elig, setElig, onPick }) {
           <HomeChoice bucket={bucket} onPick={pickHome} />
           {homeReady && !open && <ClosedByLtv bucket={bucket} onPick={pickHome} />}
 
-          {/* ② 배우자 소득 — DSR 합산용. 정부탭에서 이미 답했으면 그대로 보인다. */}
+          {askFirstTime && (
+            <div className="slideup">
+              <YesNo label="생애 처음으로 집을 사시는 건가요?"
+                desc={`생애최초면 담보 LTV ${pct(ROW.firstTime)}로 봐요.`}
+                value={elig.firstTime} onPick={(v) => setElig((s) => ({ ...s, firstTime: v }))} />
+            </div>
+          )}
+
+          {/* ③ 배우자 소득 — DSR 합산용. 정부탭에서 이미 답했으면 그대로 보인다. */}
           {askIncome && (
             <div className="slideup">
               <div style={{ fontSize: 14, color: C.ink, fontWeight: 700, marginBottom: 8 }}>배우자 소득을 합산해서 볼까요?</div>
@@ -95,8 +108,8 @@ export default function Bank({ ctx, elig, setElig, onPick }) {
       )}
 
       {open && (ready
-        ? <div className="slideup"><Results ctx={ctx} passed={passed} others={others} onPick={onPick} /></div>
-        : homeReady && <Section title="가능한 대출">
+        ? <div className="slideup"><Results ctx={ctx} facts={facts} passed={passed} others={others} onPick={onPick} /></div>
+        : askIncome && <Section title="가능한 대출">
             <Placeholder>소득 합산을 고르면 계산해요.</Placeholder>
           </Section>)}
 
@@ -146,7 +159,7 @@ function ClosedByLtv({ bucket, onPick }) {
 }
 
 /* ── 결과: 은행 주담대 카드 ── "한도 / 금리 / 실행시점" 3줄 + 무엇이 벽인가. */
-function Results({ ctx, passed, others, onPick }) {
+function Results({ ctx, facts, passed, others, onPick }) {
   if (passed.length === 0) {
     const near = others[0];
     return (
@@ -157,13 +170,14 @@ function Results({ ctx, passed, others, onPick }) {
   }
   return (
     <Section title={`가능한 대출 ${passed.length}가지`} tone="ok">
-      {passed.map((p) => <BankCard key={p.key} p={p} ctx={ctx} onPick={onPick} />)}
+      {passed.map((p) => <BankCard key={p.key} p={p} ctx={ctx} facts={facts} onPick={onPick} />)}
     </Section>
   );
 }
 
-function BankCard({ p, ctx, onPick }) {
-  const b = p.roughBinding;
+function BankCard({ p, ctx, facts, onPick }) {
+  const tier = regulatoryLtv(facts);
+  const gap = realDemandHeadGap(facts);
   return (
     <button onClick={() => onPick(p.key)}
       style={{ width: "100%", textAlign: "left", marginBottom: 10, padding: "13px 15px", borderRadius: 13, cursor: "pointer", border: `1.5px solid ${C.greenDeep}`, background: C.soft }}>
@@ -174,6 +188,19 @@ function BankCard({ p, ctx, onPick }) {
       <div style={{ fontSize: 12, color: C.greenDeep, fontWeight: 700, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>
         자본금 {won(cashNeededOf(ctx.unit.price, p.rough))}원
       </div>
+      <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 4, lineHeight: 1.6 }}>
+        담보 LTV {pct(tier.rate)} · {tier.label}
+      </div>
+      {gap === "unknown" && (
+        <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 2, lineHeight: 1.6 }}>
+          무주택 세대주로 확인되면 LTV {pct(ROW.realDemand)}예요.
+        </div>
+      )}
+      {gap === "notHead" && (
+        <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 2, lineHeight: 1.6 }}>
+          가족정보만으로는 세대주로 안 보여요. 세대주면 LTV {pct(ROW.realDemand)}예요.
+        </div>
+      )}
       <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 4, lineHeight: 1.6 }}>
         금리 {p.rateLabel} · 실행 {p.leadTime}
       </div>

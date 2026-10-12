@@ -5,14 +5,28 @@
 
 /* 첫 화면 지역(시·구·동)은 src/data/geo/geo_code.js(법정동 코드표) → src/geo.js. */
 
-/* ✏️ 여기 2 — RULE : 예산 계산 (노원=비규제 가정) */
-export const RULE = { LTV: 0.70, roomDeduction: 5500, DSR: 0.40, loanRate: 0.04, loanYears: 30, creditRate: 0.055, creditYears: 5 };
-
-/* ✏️ 여기 2-a — 지역 (출처 .claude/rules/_policy.md · 표는 products/_common.md)
-   regulated = 규제지역 / metroOther = 규제지역 외 수도권 / local = 지방. 노원 스냅샷 = 규제지역 외 수도권 가정.
-   ⚠️ 바꾸면 PRODUCTS.bank.LTV도 같이 본다(LTV 표의 행이 지역마다 다르다 — bank.md 1절). */
-export const REGION = "metroOther";
+/* ✏️ 여기 2-a — 지역 (출처 .claude/rules/_policy.md · LTV 표는 products/_common.md)
+   regulated = 규제지역 / metroOther = 규제지역 외 수도권 / local = 지방.
+   서울 전역은 규제지역. 은행 LTV 행은 engine.regulatoryLtv가 이 키로 LTV_TABLE을 읽는다. */
+export const REGION = "regulated";
 export const REGION_LABEL = { regulated: "규제지역", metroOther: "규제지역 외 수도권", local: "지방" };
+
+/* 은행 규제 LTV. 열 = 지역, 행 = 차주. 비율. 숫자의 출처는 products/_common.md.
+   여러 행에 맞으면 engine.regulatoryLtv가 높은 비율을 고른다. 디딤돌·보금자리는 이 표를 안 탄다. */
+export const LTV_TABLE = {
+  regulated:  { firstTime: 0.70, realDemand: 0.60, noHome: 0.40, disposing: 0.40, oneHome: 0, multiHome: 0 },
+  metroOther: { firstTime: 0.70, realDemand: 0.60, noHome: 0.70, disposing: 0.70, oneHome: 0, multiHome: 0 },
+  local:      { firstTime: 0.80, realDemand: 0.80, noHome: 0.70, disposing: 0.60, oneHome: 0.60, multiHome: 0.60 },
+};
+
+/* 서민·실수요. 셋이 모두 맞을 때만 LTV_TABLE의 realDemand 행. 단위는 만원. */
+export const REAL_DEMAND = { incomeCap: 9000, priceCap: 80000 };
+
+/* ✏️ 여기 2 — RULE : 예산 계산.
+   LTV는 차주 유형을 모르므로 그 지역 일반차주(무주택) 행. 은행 상품 한도는 regulatoryLtv가 다시 고른다. */
+export const RULE = {
+  LTV: LTV_TABLE[REGION].noHome, roomDeduction: 5500, DSR: 0.40, loanRate: 0.04, loanYears: 30, creditRate: 0.055, creditYears: 5,
+};
 
 /* 지역별 주담대 한도 (만원). 담보가격 구간(upTo 이하)에 따라 갈린다 — 위에서부터 첫 매치.
    null = 제한 없음(그 항이 Min에서 빠진다). 정부상품은 이 표를 안 탄다(PRODUCTS[key].regionCapped 없음).
@@ -72,10 +86,12 @@ export const PRODUCTS = {
        ⚠️ calcRate도 없다. 디딤돌 원리금 계산 금리는 아래 DIDIMDOL_LOAN_RATE 한 곳에만 둔다
           (기타부채 추정금리 ESTIMATED_DEBT_RATE와 구분하기 위해서다). 여기 되살리지 말 것. */
     key: "didimdol", name: "디딤돌대출", rateLabel: "연 2~3%대", capacityModel: "fundDTI",
+    /* 상품 고유 LTV. 규제지역 은행 표(LTV_TABLE)와 별개 — didimdol.md. MVP는 70%만. */
     LTV: 0.70, offsetsRoomDeduction: false, cap: 20000, leadTime: "약 2개월",
   },
   bogeumjari: {
     key: "bogeumjari", name: "보금자리론", rateLabel: "연 3~4%대",
+    /* ⚠️ 스텁. 규제지역 은행 표를 타지 않는다(bogeumjari.md). */
     calcRate: 0.038, ratio: 0.60, LTV: 0.70, offsetsRoomDeduction: true, cap: 36000, leadTime: "약 1.5~2개월",
   },
   /* 은행 일반 주담대 — 출처 .claude/rules/products/bank/bank.md. 숫자는 전부 ⚠️ 가정치.
@@ -88,7 +104,8 @@ export const PRODUCTS = {
   bank: {
     key: "bank", name: "일반 주택담보대출", rateLabel: "연 4%대",
     calcRate: RULE.loanRate, stressRate: 0.015, ratio: RULE.DSR, years: RULE.loanYears,
-    LTV: 0.70, offsetsRoomDeduction: true, cap: null, regionCapped: true, leadTime: "약 2~4주",
+    /* LTV 폴백 = 일반차주. 실제 비율은 ltvFromTable → engine.regulatoryLtv (bank.md 1절). */
+    LTV: LTV_TABLE[REGION].noHome, ltvFromTable: true, offsetsRoomDeduction: true, cap: null, regionCapped: true, leadTime: "약 2~4주",
   },
 };
 
