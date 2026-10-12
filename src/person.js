@@ -16,7 +16,8 @@
      IncomeCheck  → incomeCheck(소득 신뢰도 자가진단)
      소득 화면     → ownIncome */
 import { LEVER, DEBT_KINDS } from "./data.js";
-import { ageOf, spouseIncomeOf, debtTotal, buildCtx, deriveFacts } from "./engine.js";
+import { ageOf, spouseIncomeOf, borrowerSpouseIncomeOf, debtTotal, buildCtx, deriveFacts } from "./engine.js";
+import { GOV_RULES, BANK_RULES } from "./products/index.js";
 
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
@@ -27,7 +28,8 @@ const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 export const EMPTY_ELIG = {
   /* ── 가족정보 카드 — 이 셋이 나이·배우자유무·자녀수·미성년·신생아를 전부 만든다 ── */
   ownBirthday: "",        // 본인 생년월일 → 만나이(단독세대주 후보 / 만39세 이하 판정)
-  hasSpouse: null,        // true | false — "배우자 없음" 토글. ⚠️ false여도 결혼예정이면 예비배우자 소득은 묻는다
+  hasSpouse: null,        // true | false — 가족정보의 "배우자 있음/없음"(가구 구성). ⚠️ false여도 결혼예정이면 예비배우자 소득은 묻는다
+                          //   은행탭의 '합산할까요?'는 이 필드가 아니다(아래 bankIncomeJoint) — 한 필드에 두 뜻을 두면 한쪽 답이 다른 쪽을 지운다
   spouseBirthday: "",     // 배우자 생년월일. ⚠️ 지금 판정 규칙이 쓰는 값은 아니다(가구 확인용·향후 우대 대비)
   birthdays: [],          // 자녀 생년월일 — 0명부터 동적 추가/삭제
 
@@ -43,6 +45,7 @@ export const EMPTY_ELIG = {
   /* ── 소득 ── */
   spouseBand: null,       // SPOUSE_INCOME_BANDS의 key (합산할 배우자가 있을 때만)
   spouseIncomeRaw: "",    // 소득상한 경계일 때만 받는 정밀값(만원)
+  bankIncomeJoint: null,  // 은행탭 "배우자 소득 합산"(true) / "본인 소득만"(false). 은행 DSR(차주단위)에만 쓴다
 
   /* ── 그 외 ── */
   hasDreamAccount: null,  // 청년 주택드림 통장 (만39세 이하에게만 묻는다)
@@ -112,6 +115,15 @@ export const homeBucketOf = (elig) => {
   if (elig.homeCount >= 2) return "multi";
   return null;
 };
+/* 은행 소득 합산 여부. 은행탭에서 고른 값이 먼저다.
+   안 골랐으면 정부탭 답이 '다 찼을 때만' 빌린다(배우자 있음 = 합산) — 정부 질문 도중의 가족정보만으로
+   은행 답을 채우면, 결혼·소득을 묻기도 전에 목록이 정밀 숫자로 바뀐다(test/claude N-04).
+   null = 아직 모른다. */
+export function bankJointOf(elig) {
+  if (elig.bankIncomeJoint != null) return elig.bankIncomeJoint;
+  return eligReady(elig) ? elig.hasSpouse === true : null;
+}
+
 export function bankSteps(elig) {
   const bucket = homeBucketOf(elig);
   const homeReady = bucket !== null;
@@ -119,14 +131,16 @@ export function bankSteps(elig) {
   const askFirstTime = homeReady && bucket === "none";
   const firstTimeReady = !askFirstTime || elig.firstTime !== null;
   const askIncome = homeReady && open && firstTimeReady;
-  /* 배우자 있음 → 밴드까지 있어야 소득이 정해진다. 없음 → 본인 소득만. */
-  const spouseReady = elig.hasSpouse === false || (elig.hasSpouse === true && elig.spouseBand !== null);
-  return { bucket, homeReady, open, askFirstTime, firstTimeReady, askIncome, spouseReady, ready: askIncome && spouseReady };
+  /* 합산 → 밴드까지 있어야 소득이 정해진다. 본인 소득만 → 바로 된다. */
+  const joint = bankJointOf(elig);
+  const spouseReady = joint === false || (joint === true && elig.spouseBand !== null);
+  return { bucket, homeReady, open, askFirstTime, firstTimeReady, askIncome, joint, spouseReady, ready: askIncome && spouseReady };
 }
 export const bankReady = (elig) => bankSteps(elig).ready;
 
-/* 배우자 유무 토글 — 뒤 질문들과 모순이 남지 않게 어긋난 답만 조용히 비운다.
-   두 탭이 같은 토글을 쓰므로 판단은 여기 한 곳(화면마다 다르게 정리하면 탭을 오갈 때 답이 꼬인다). */
+/* 가족정보의 배우자 유무 토글(정부탭) — 뒤 질문들과 모순이 남지 않게 어긋난 답만 조용히 비운다.
+   ⚠️ 은행탭의 '합산 / 본인 소득만'은 이 함수가 아니라 withBankJoint다. 기혼자가 본인 소득으로만
+      DSR을 보는 건 정상적인 선택이라, 그걸 '배우자 없음'으로 읽으면 정부탭 결혼 답이 지워진다. */
 export function withSpouse(s, v) {
   const next = { ...s, hasSpouse: v };
   if (v === false) {
@@ -134,8 +148,23 @@ export function withSpouse(s, v) {
     /* 결혼예정은 '배우자 없음'과 모순이 아니다(예비배우자) → 그 소득은 계속 합산 대상이라 안 지운다 */
     if (s.marital !== "planned") { next.spouseBand = null; next.spouseIncomeRaw = ""; }
     if (s.marital === "married") { next.marital = null; next.marriedWithin7 = null; }
+    /* 배우자가 없으면 은행 합산은 성립하지 않는다. 이미 합산을 골랐으면 본인 소득만으로 바꾼다. */
+    if (s.bankIncomeJoint === true) next.bankIncomeJoint = false;
   } else if (s.marital === "single") { next.marital = null; next.marriedWithin7 = null; }
   return next;
+}
+
+/* 은행탭 소득 합산 토글. 정부탭 답(배우자 유무·결혼·밴드)은 건드리지 않는다.
+   합산을 고르면 배우자가 있다는 뜻이므로, 가족정보가 비어 있거나 다르면 '배우자 있음'으로 맞춘다. */
+export function withBankJoint(s, v) {
+  const base = v === true && s.hasSpouse !== true ? withSpouse(s, true) : s;
+  return { ...base, bankIncomeJoint: v };
+}
+
+/* 주택 수 답. 수가 바뀌면 처분조건부 답을 비운다 — 예전에 고른 처분 약정이
+   다시 묻지 않은 채 살아나 LTV를 정하면 안 된다(test/claude N-07). 은행탭은 둘을 한 번에 고른다. */
+export function withHomeCount(s, n) {
+  return { ...s, homeCount: n, disposeExisting: n === s.homeCount ? s.disposeExisting : null };
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -197,8 +226,17 @@ export const EMPTY_PERSON = {
    부채·레버는 조건이 아니다 — 안 받았으면 무부채로 가정하고 계산한다(기존 '천장' 잣대와 같다). */
 export const personReady = (person) => eligReady(person.elig) || bankReady(person.elig);
 
+/* 정밀 숫자에 쓰는 상품 = 답을 끝낸 탭의 상품만. 은행만 답했는데 정부 상품(보금자리) 숫자로
+   목록이 뛰면 안 된다(test/claude F-02). 어느 쪽도 안 끝났으면 빈 배열. */
+export const answeredRules = (elig) => [
+  ...(eligReady(elig) ? GOV_RULES : []),
+  ...(bankReady(elig) ? BANK_RULES : []),
+];
+
 /* 부부합산 소득 (만원). 본인(소득 화면) + 배우자(자격 화면 밴드). */
 export const totalIncomeOf = (person) => person.ownIncome + spouseIncomeOf(person.elig);
+/* 차주단위 소득 (만원). 은행 DSR. 배우자는 은행탭에서 합산을 고른 경우만. */
+export const borrowerIncomeOf = (person) => person.ownIncome + borrowerSpouseIncomeOf(person.elig);
 
 /* ── 사람 상태 → 레버 값 ──
    products/limit.js가 요구하는 계약 { price, income, incomeMax, debt, debts, offsetRoom }를 만든다.
@@ -208,9 +246,14 @@ export const totalIncomeOf = (person) => person.ownIncome + spouseIncomeOf(perso
    소득을 더 올리면 한도가 느는 게 아니라 '자격'이 닫히기 때문이다(거짓 희망 방지).
    지도처럼 상품이 하나로 정해지지 않은 자리에선 3억(LEVER.incomeMax)까지.
 
-   pulled=false로 부르면 '당기기 전' 시작 위치가 나온다 — 행동 번역의 기준선. */
-export function leverOf(person, price, incomeCap = null, pulled = true) {
-  const income = totalIncomeOf(person);
+   pulled=false로 부르면 '당기기 전' 시작 위치가 나온다 — 행동 번역의 기준선.
+
+   basis = 이 상품이 보는 소득(PRODUCTS[key].incomeBasis). "household" 부부합산 / "borrower" 차주단위(은행).
+   pull.income은 늘 부부합산 기준의 가정값이다. 차주 기준이면 두 소득의 차이(incomeGap)만큼 빼서 쓴다. */
+export function leverOf(person, price, incomeCap = null, pulled = true, basis = "household") {
+  const household = totalIncomeOf(person);
+  const income = basis === "borrower" ? borrowerIncomeOf(person) : household;
+  const incomeGap = Math.max(household - income, 0);
   /* 소득 레버 최댓값 = 3억. 상품 소득상한이 더 낮으면 거기서 자른다.
      이미 상한을 넘었으면 범위가 뒤집히지 않게 현재 소득을 바닥으로 깐다. */
   const ceiling = Math.min(incomeCap ?? LEVER.incomeMax, LEVER.incomeMax);
@@ -228,14 +271,18 @@ export function leverOf(person, price, incomeCap = null, pulled = true) {
   const facts = deriveFacts(buildCtx({ unit: { price, areaM2: 0 }, ownIncome: person.ownIncome, elig: person.elig }));
   return {
     price,
-    income: clamp(pull?.income ?? income, income, incomeMax),
+    income: clamp(pull?.income != null ? pull.income - incomeGap : income, income, incomeMax),
     incomeMax,
+    incomeGap,
     debts,
     debt: debtTotal(debts),
-    /* null = 상품이 정한 방공제. true/false는 전략 화면에서 켠 값만. */
+    /* null = 상품이 정한 방공제. true/false는 전략 화면에서 켠 값만.
+       ⚠️ 목록(verdict.judgeUnit)은 이 값을 읽지 않고 늘 상품 기본값을 쓴다(ux.md 「방법 화면」). */
     offsetRoom: pull && typeof pull.offsetRoom === "boolean" ? pull.offsetRoom : null,
-    /* 은행 LTV 행. 소득·가격은 레버 값이 따로 들어가므로 여기 넣지 않는다. */
+    /* 은행 LTV 행. 소득·가격은 레버 값이 따로 들어가므로 여기 넣지 않는다.
+       incomeGap = 부부합산 − 차주단위. 서민·실수요의 소득 요건은 부부합산이라 그 차이를 다시 더해 본다. */
     ltv: {
+      incomeGap,
       firstTime: facts.firstTime,
       noHome: facts.noHome,
       disposing: facts.disposing,

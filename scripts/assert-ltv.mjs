@@ -89,11 +89,11 @@ if (!(atCap.limit > atMax.limit)) fail("60% tier should beat 40% tier at this pr
 const listed = evaluate({ price: 100000 }, 999999);
 eq("budget screen uses general ltv minus room", listed.loan, 100000 * 0.4 - RULE.roomDeduction);
 
-const none = { ...EMPTY_PERSON.elig, homeCount: 0, hasSpouse: false, firstTime: null };
+const none = { ...EMPTY_PERSON.elig, homeCount: 0, bankIncomeJoint: false, firstTime: null };
 eq("bank waits for first time", bankSteps(none).ready, false);
 eq("bank ready after first time no", bankSteps({ ...none, firstTime: false }).ready, true);
 eq("dispose does not ask first time", bankSteps({
-  ...EMPTY_PERSON.elig, homeCount: 1, disposeExisting: true, hasSpouse: false, firstTime: null,
+  ...EMPTY_PERSON.elig, homeCount: 1, disposeExisting: true, bankIncomeJoint: false, firstTime: null,
 }).ready, true);
 
 const person = {

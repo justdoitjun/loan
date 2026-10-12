@@ -3,14 +3,14 @@
    질문:
      ① 주택 보유 상태  → homeCount · disposeExisting  (일반차주 40% / 유지·다주택 0% = 닫힘)
      ② 무주택이면 생애최초 → firstTime                 (70%. 정부탭에서 답했으면 다시 안 묻는다)
-     ③ 배우자 소득     → hasSpouse · spouseBand       (DSR 소득 합산)
+     ③ 배우자 소득     → bankIncomeJoint · spouseBand (DSR 소득 합산. 가족정보의 배우자 유무와 다른 질문이다)
    서민·실수요 60%의 세대주는 여기서 묻지 않는다. 가족정보가 있으면 추정하고, 없으면 카드에 그 길을 적는다.
    ⚠️ 부채는 여기서 안 묻는다(DetailInfo 한 곳). 계산은 engine(limitParts/judgeAll), 진행 상태는 person.bankSteps. */
 import { useState } from "react";
 import { REGION, REGION_LABEL, LTV_TABLE, C } from "../data.js";
 import { deriveFacts, judgeAll, regulatoryLtv, realDemandHeadGap, won, eok, cashNeededOf } from "../engine.js";
 import { BANK_RULES } from "../products/index.js";
-import { bankSteps, withSpouse } from "../person.js";
+import { bankSteps, withBankJoint } from "../person.js";
 import { Section, Placeholder, eyebrow, h1, fine, pill } from "../ui.jsx";
 import { YesNo, SpouseIncomeTrack, AnswersDropdown, SkippedNote } from "./shared.jsx";
 
@@ -29,11 +29,10 @@ const HOME_BUCKETS = [
 /* 접힌 요약. 접어도 '무엇으로 판정했는지'는 남긴다(정부탭과 같은 원칙). */
 const answerRows = (elig, ctx, bucket) => {
   const home = HOME_BUCKETS.find((b) => b.key === bucket);
-  const spouse = elig.hasSpouse === true
-    ? `본인 ${won(ctx.ownIncome)}원 + 배우자 ${won(ctx.spouseIncome)}원`
-    : ctx.spouseIncome > 0
-      ? `본인 ${won(ctx.ownIncome)}원 + 예비배우자 ${won(ctx.spouseIncome)}원 (정부탭 답변)`
-      : `본인 ${won(ctx.ownIncome)}원만`;
+  /* 은행은 차주단위다. 예비배우자 소득은 정부탭에서 답했어도 더하지 않는다(bank.md 3절). */
+  const spouse = ctx.borrowerSpouseIncome > 0
+    ? `본인 ${won(ctx.ownIncome)}원 + 배우자 ${won(ctx.borrowerSpouseIncome)}원`
+    : `본인 ${won(ctx.ownIncome)}원만`;
   const rows = [["주택 보유", home ? home.label : "—"]];
   if (bucket === "none") rows.push(["생애최초", elig.firstTime ? "네" : "아니오"]);
   rows.push(["소득", spouse]);
@@ -42,10 +41,12 @@ const answerRows = (elig, ctx, bucket) => {
 
 export default function Bank({ ctx, elig, setElig, onPick }) {
   const facts = deriveFacts(ctx);
-  const { bucket, homeReady, open, askFirstTime, askIncome, ready } = bankSteps(elig);
+  const { bucket, homeReady, open, askFirstTime, askIncome, joint, ready } = bankSteps(elig);
+  /* 가족정보에서 '배우자 없음'이라고 답했으면 합산은 고를 수 없다. */
+  const noSpouse = elig.hasSpouse === false;
 
   const pickHome = (b) => setElig((s) => ({ ...s, homeCount: b.homeCount, disposeExisting: b.dispose }));
-  const setHasSpouse = (v) => setElig((s) => withSpouse(s, v));
+  const setJoint = (v) => setElig((s) => withBankJoint(s, v));
   const pickBand = (k) => setElig((s) => ({ ...s, spouseBand: k, spouseIncomeRaw: "" }));
 
   /* 다 채우면 접는다. editing은 화면 로컬(답이 아니라 '고치는 중'이라는 일시 상태). */
@@ -83,24 +84,28 @@ export default function Bank({ ctx, elig, setElig, onPick }) {
             </div>
           )}
 
-          {/* ③ 배우자 소득 — DSR 합산용. 정부탭에서 이미 답했으면 그대로 보인다. */}
+          {/* ③ 배우자 소득 — DSR 합산용. 정부탭 답을 다 했으면 그 답(배우자 있음 = 합산)이 그대로 보인다.
+              '본인 소득만'은 합산 여부만 바꾼다. 정부탭의 배우자·결혼 답은 지우지 않는다. */}
           {askIncome && (
             <div className="slideup">
               <div style={{ fontSize: 14, color: C.ink, fontWeight: 700, marginBottom: 8 }}>배우자 소득을 합산해서 볼까요?</div>
               <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                <button onClick={() => setHasSpouse(true)} style={pill(elig.hasSpouse === true)}>배우자 소득 합산</button>
-                <button onClick={() => setHasSpouse(false)} style={pill(elig.hasSpouse === false)}>본인 소득만</button>
+                <button onClick={() => setJoint(true)} disabled={noSpouse} style={{ ...pill(joint === true), opacity: noSpouse ? 0.45 : 1, cursor: noSpouse ? "not-allowed" : "pointer" }}>배우자 소득 합산</button>
+                <button onClick={() => setJoint(false)} style={pill(joint === false)}>본인 소득만</button>
               </div>
-              {elig.hasSpouse === true && (
+              {joint === true && (
                 <div className="slideup">
                   <SpouseIncomeTrack value={elig.spouseBand} onPick={pickBand} ownIncome={ctx.ownIncome} planned={false}
                     desc="합산하면 배우자 대출도 같이 넣으세요." />
                 </div>
               )}
-              {elig.hasSpouse === false && (
+              {joint === false && (
                 <SkippedNote>
                   본인 소득 {won(ctx.ownIncome)}원으로만 봐요.
                 </SkippedNote>
+              )}
+              {joint === null && noSpouse && (
+                <SkippedNote>가족정보에서 배우자 없음으로 답했어요.</SkippedNote>
               )}
             </div>
           )}
@@ -183,10 +188,10 @@ function BankCard({ p, ctx, facts, onPick }) {
       style={{ width: "100%", textAlign: "left", marginBottom: 10, padding: "13px 15px", borderRadius: 13, cursor: "pointer", border: `1.5px solid ${C.greenDeep}`, background: C.soft }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
         <span style={{ fontSize: 15, fontWeight: 800, color: C.inkSoft }}>{p.title}</span>
-        <span style={{ fontSize: 15, fontWeight: 800, color: C.greenDeep, fontVariantNumeric: "tabular-nums" }}>최소 대출 약 {eok(p.rough)}</span>
+        <span style={{ fontSize: 15, fontWeight: 800, color: C.greenDeep, fontVariantNumeric: "tabular-nums" }}>대출 약 {eok(p.rough)}</span>
       </div>
       <div style={{ fontSize: 12, color: C.greenDeep, fontWeight: 700, marginTop: 3, fontVariantNumeric: "tabular-nums" }}>
-        자본금 {won(cashNeededOf(ctx.unit.price, p.rough))}원
+        필요 현금 {won(cashNeededOf(ctx.unit.price, p.rough))}원
       </div>
       <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 4, lineHeight: 1.6 }}>
         담보 LTV {pct(tier.rate)} · {tier.label}
@@ -204,10 +209,10 @@ function BankCard({ p, ctx, facts, onPick }) {
       <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 4, lineHeight: 1.6 }}>
         금리 {p.rateLabel} · 실행 {p.leadTime}
       </div>
-      {/* Min의 세 항을 그대로 보여준다 — 은행에선 이 표가 곧 판정 근거다 */}
-      {/* <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
+      {/* Min의 세 항을 그대로 보여준다 — 은행에선 이 표가 곧 판정 근거다("무엇이 벽인가", ux.md 3단계) */}
+      <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
         {p.roughParts.map((part) => {
-          const on = part.key === b?.key;
+          const on = part.key === p.roughBinding?.key;
           return (
             <div key={part.key} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "2px 0", color: on ? C.ink : C.inkSoft, fontWeight: on ? 800 : 500 }}>
               <span>{part.label}{on && <span style={{ color: C.amber, marginLeft: 6, fontSize: 11 }}>← 여기서 걸려요</span>}</span>
@@ -215,7 +220,7 @@ function BankCard({ p, ctx, facts, onPick }) {
             </div>
           );
         })}
-      </div> */}
+      </div>
       {/* {p.note && <div style={{ fontSize: 12, color: C.faint, marginTop: 4, lineHeight: 1.6 }}>{p.note}</div>} */}
       <div style={{ fontSize: 12, color: C.greenDeep, fontWeight: 800, marginTop: 7 }}>전략을 짜드릴게요 →</div>
     </button>

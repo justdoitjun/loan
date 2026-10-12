@@ -26,7 +26,11 @@ export function ageOf(birthday) {
   return a;
 }
 export const countMinors = (birthdays) => (birthdays || []).filter((d) => { const a = ageOf(d); return a !== null && a < 19; }).length;
-const monthsBetween = (from, to) => (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
+/* 다 채운 개월 수. 날짜까지 본다 — 연·월만 빼면 그 달 1일~오늘이 한 달 더 지난 것으로 잡힌다. */
+const monthsBetween = (from, to) =>
+  (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth()) - (to.getDate() < from.getDate() ? 1 : 0);
+/* 날짜 비교용 정수 YYYYMMDD. N년 뒤 같은 날은 + N * 10000 — 2월 29일도 숫자로만 비교하니 밀리지 않는다. */
+const dayKey = (d) => d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
 
 /* ── 부채 ── */
 /* 자격 화면은 부채를 묻지 않는다 — 자격은 소득상한 위/아래로 갈리지 부채로 갈리지 않기 때문.
@@ -46,12 +50,13 @@ export function debtTotal(debts) {
   return DEBT_KINDS.reduce((sum, k) => sum + num(debts?.[k.key]), 0);
 }
 
-/* 디딤돌 DTI에 넣는 기존 부채 잔액 합계(만원).
-   debts가 있으면 종류 합계를 쓰고, 없으면 balance 숫자 하나를 쓴다.
+/* 기존 부채 잔액 합계(만원). debts가 있으면 종류 합계를 쓰고, 없으면 balance 숫자 하나를 쓴다.
+   fundDti = 디딤돌 DTI ②(기타부채)로 볼 때. 주담대처럼 inFundDti: false인 종류는 뺀다.
    은행 DSR은 이 합계를 쓰지 않는다 — engine_bank_dsr.bankExistingAnnual. */
-export function combinedDebtBalance(debt) {
-  if (debt?.debts != null) return debtTotal(debt.debts);
-  return num(debt?.balance);
+export function combinedDebtBalance(debt, fundDti = false) {
+  if (debt?.debts == null) return num(debt?.balance);
+  if (!fundDti) return debtTotal(debt.debts);
+  return DEBT_KINDS.reduce((sum, k) => sum + (k.inFundDti === false ? 0 : num(debt.debts[k.key])), 0);
 }
 
 export function annualDebtService(debtBalance, view = "principalAndInterest") {
@@ -239,12 +244,12 @@ export function limitParts(p, price, income, debt = null, capOverride = null, of
   const rate = ltvRate == null ? p.LTV : ltvRate;
   const ltvPct = Math.round(rate * 100);
   const ltv = Math.max(price * rate - (offset ? 0 : RULE.roomDeduction), 0);
-  const balance = combinedDebtBalance(debt);
+  const fund = p.capacityModel === "fundDTI";
+  const balance = combinedDebtBalance(debt, fund);
 
-  /* 디딤돌: DTI(합계 × 이자). 이자만 보는 상품: 합계 × 금리.
+  /* 디딤돌: DTI(기타부채 합계 × 이자 — 주담대 제외). 이자만 보는 상품: 합계 × 금리.
      은행 DSR: 종류별 연 상환액. 기존 부채의 이자는 engine_bank_dsr가
      실제 금리 + 스트레스 금리로 만든다. 본건 원리금균등도 아래 합산 금리를 쓴다. */
-  const fund = p.capacityModel === "fundDTI";
   const existingAnnual = fund
     ? otherDebtInterest(balance)
     : debt?.view === "interestOnly"
@@ -276,36 +281,74 @@ export function limitParts(p, price, income, debt = null, capOverride = null, of
    여기 담긴 건 뒤 화면에서 절대 다시 묻지 않는다.
    ══════════════════════════════════════════════════════════════════════════ */
 
-/* 배우자 소득 = 정밀값 우선, 없으면 밴드 대표값. 미혼이면 질문 자체를 건너뛰므로 0. */
-export function spouseIncomeOf(elig) {
-  if (elig.marital === "single") return 0;
+/* 배우자(또는 예비배우자) 소득 금액 = 정밀값 우선, 없으면 밴드 대표값. */
+function spouseAmountOf(elig) {
   const band = SPOUSE_INCOME_BANDS.find((b) => b.key === elig.spouseBand) || null;
   const precise = elig.spouseIncomeRaw === "" || elig.spouseIncomeRaw == null ? null : num(elig.spouseIncomeRaw);
   return precise ?? band?.rep ?? 0;
 }
 
+/* 정부탭(부부합산)의 배우자 소득. 결혼예정이면 예비배우자 소득도 넣는다. 미혼이면 0. */
+export function spouseIncomeOf(elig) {
+  if (elig.marital === "single") return 0;
+  return spouseAmountOf(elig);
+}
+
+/* 소득을 합산할 상대가 있는가(정부탭 기준) — 배우자가 있다고 답했거나 결혼예정. person.eligSteps와 같은 판단. */
+export const spouseCounted = (elig) => elig.hasSpouse === true || elig.marital === "planned";
+
+/* 은행(차주단위)의 배우자 소득 — bank.md 3절.
+   은행탭의 '배우자 소득 합산'(bankIncomeJoint)을 고른 경우만 더한다. 은행탭에서 아직 안 골랐으면
+   가족정보의 배우자 유무를 따른다(언제 그 답을 빌려도 되는지는 person.bankJointOf가 정한다).
+   예비배우자는 차주단위 합산 대상이 아니다 — 결혼예정이면 0. */
+export function borrowerSpouseIncomeOf(elig) {
+  const joint = elig.bankIncomeJoint ?? elig.hasSpouse === true;
+  if (!joint || elig.hasSpouse === false || elig.marital === "planned" || elig.marital === "single") return 0;
+  return spouseAmountOf(elig);
+}
+
 export function buildCtx({ unit, ownIncome, elig }) {
   const spouseIncome = spouseIncomeOf(elig);
+  const borrowerSpouseIncome = borrowerSpouseIncomeOf(elig);
   return {
     ...elig,
     unit, ownIncome, spouseIncome,
     totalIncome: ownIncome + spouseIncome,
+    /* 은행 DSR이 보는 소득(PRODUCTS[key].incomeBasis === "borrower"). */
+    borrowerSpouseIncome,
+    borrowerIncome: ownIncome + borrowerSpouseIncome,
   };
 }
 
 /* 소득 레버용 — 가정 합산소득을 얹은 컨텍스트 사본.
    자격은 소득상한으로 갈리므로, 소득 레버를 올리면 '한도'만 아니라 '자격'도 움직인다.
    올린 몫은 배우자 합산·인정소득에서 온다고 본다(화면 설명과 같은 축).
-   미혼이면 배우자가 없으니 본인 인정소득에 얹는다 — 맞벌이 플래그가 잘못 켜지지 않게. */
+   합산할 배우자가 없으면(미혼, 은행탭만 답한 사람) 본인 인정소득에 얹는다 — 맞벌이 플래그가 잘못 켜지지 않게. */
 export function withAssumedIncome(ctx, assumedTotal) {
   const delta = Math.max(assumedTotal - ctx.totalIncome, 0);
-  const toSpouse = ctx.marital !== "single";
+  const toSpouse = spouseCounted(ctx);
+  /* 차주단위 소득은 배우자를 합산했을 때만 배우자 몫이 따라 오른다. */
+  const borrowerDelta = toSpouse && ctx.borrowerSpouseIncome === 0 ? 0 : delta;
   return {
     ...ctx,
     ownIncome: ctx.ownIncome + (toSpouse ? 0 : delta),
     spouseIncome: ctx.spouseIncome + (toSpouse ? delta : 0),
     totalIncome: ctx.totalIncome + delta,
+    borrowerIncome: (ctx.borrowerIncome ?? ctx.totalIncome) + borrowerDelta,
   };
+}
+
+/* 소득 가정의 최댓값 = 이 경로의 소득상한(ux.md — 넘기면 자격이 닫힌다). null = 상한 없음(은행).
+   1인 상한이 붙은 티어(신생아 맞벌이)는 올린 몫을 받는 사람(withAssumedIncome과 같은 규칙)이
+   1인 상한에 닿는 지점에서도 자른다 — 합산 2억 안이어도 한 사람이 1.3억을 넘으면 닫히기 때문. */
+export function assumedIncomeCap(judged, ctx) {
+  let cap = judged.income.value;
+  const per = judged.income.perPersonCap;
+  if (per != null) {
+    const other = spouseCounted(ctx) ? ctx.ownIncome : ctx.spouseIncome;
+    cap = Math.min(cap ?? Infinity, num(other) + per);
+  }
+  return cap;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -333,14 +376,17 @@ export function deriveFacts(ctx) {
   const weddingMonths = planned && ctx.weddingDate ? monthsBetween(today, new Date(ctx.weddingDate)) : null;
   const weddingSoon = weddingMonths !== null && weddingMonths >= 0 && weddingMonths <= WEDDING_SOON_MONTHS;
 
-  /* 신생아 = 접수일로부터 N년 이내 출생 AND 기준일 이후 출생 (둘 다 만족) */
-  const newbornFloor = new Date(NEWBORN_RULE.since);
+  /* 신생아 = 접수일로부터 N년 이내 출생 AND 기준일 이후 출생 (둘 다 만족).
+     N년은 날짜까지 본다 — 출생일의 N년 뒤 같은 날까지가 '이내'다. */
+  const newbornFloor = dayKey(new Date(NEWBORN_RULE.since));
+  const todayKey = dayKey(today);
   const hasNewborn = (ctx.birthdays || []).some((d) => {
     if (!d) return false;
     const b = new Date(d);
     if (isNaN(b.getTime())) return false;
-    const withinYears = monthsBetween(b, today) <= NEWBORN_RULE.withinYears * 12 && b <= today;
-    return withinYears && b >= newbornFloor;
+    const born = dayKey(b);
+    const withinYears = born <= todayKey && todayKey <= born + NEWBORN_RULE.withinYears * 10000;
+    return withinYears && born >= newbornFloor;
   });
 
   /* ⚠️ 세대주 여부는 화면에서 직접 묻지 않는다 — 가족정보(나이·배우자·자녀)에서만 추정한다.
@@ -361,6 +407,7 @@ export function deriveFacts(ctx) {
   return {
     /* 금액·물건 */
     income: ctx.totalIncome, price: ctx.unit.price, areaM2: ctx.unit.areaM2,
+    borrowerIncome: ctx.borrowerIncome ?? ctx.totalIncome,   // 은행 DSR(차주단위) 소득
     maxPersonIncome: Math.max(ctx.ownIncome || 0, ctx.spouseIncome || 0),
     /* 플래그 */
     noHome: ctx.homeCount === 0,
@@ -381,6 +428,9 @@ export function deriveFacts(ctx) {
     minors, twoPlusMinors: minors >= 2,
     hasNewborn,
     dualIncome: (ctx.spouseIncome || 0) > 0,
+    /* 민법상 성년(만 19세 이상). 생년월일을 모르면(은행탭은 묻지 않는다) 성년으로 본다 —
+       미성년으로 확인된 사람만 막는다. 정부탭은 생년월일을 먼저 받으므로 늘 확인된다. */
+    adult: age === null || age >= 19,
     /* 청년주택드림의 나이 게이트. 만 40세 이상은 이 플래그가 꺼져서 규칙 requires에서 걸러진다. */
     under39: age !== null && age <= 39,
     hasDreamAccount: ctx.hasDreamAccount === true,
@@ -422,7 +472,8 @@ export function judgeRule(rule, f) {
      배열이면 priceCap·loanCap처럼 조건별 티어(예: 미혼단독세대주만 60㎡) — 위에서부터 첫 매치. */
   if (rule.areaCap != null) {
     const area = Array.isArray(rule.areaCap) ? pickTier(rule.areaCap, f) : { value: rule.areaCap, label: `${rule.areaCap}㎡ 이하` };
-    checks.push({ key: "area", label: "전용면적", actual: f.areaM2, cap: area.value, tier: area.label, over: f.areaM2 - area.value, unit: "㎡" });
+    /* 면적 차이는 소수 둘째 자리까지 — 85.92 − 85를 그대로 빼면 0.9200000000000017이 화면에 찍힌다. */
+    checks.push({ key: "area", label: "전용면적", actual: f.areaM2, cap: area.value, tier: area.label, over: Math.round((f.areaM2 - area.value) * 100) / 100, unit: "㎡" });
   }
 
   const failedChecks = checks.filter((c) => c.over > 0);
@@ -452,8 +503,9 @@ export function judgeRule(rule, f) {
    parts·binding까지 돌려준다 — 카드가 "무엇이 벽인가"를 부채 입력 전에도 말할 수 있게. */
 export function roughLimit(judged, f) {
   const p = PRODUCTS[judged.product];
-  const ltvRate = p.ltvFromTable ? regulatoryLtv(f).rate : null;
-  return limitParts(p, f.price, f.income, null, judged.limit, null, ltvRate);
+  const ltvRate = p.ltvFromTable ? regulatoryLtv(f).rate : null;   // 서민 행의 소득 요건은 부부합산(f.income)
+  const income = p.incomeBasis === "borrower" ? f.borrowerIncome : f.income;
+  return limitParts(p, f.price, income, null, judged.limit, null, ltvRate);
 }
 
 /* 판정 대상 규칙 묶음 → { passed(대략 한도 높은 순), others(근접 순), all }.

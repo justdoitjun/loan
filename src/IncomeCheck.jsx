@@ -14,10 +14,10 @@
    가드레일: 숫자로 확답하지 않는다(초록/노랑만). 노랑도 문을 닫지 않고 필요서류를
    같이 보여준다. 정확한 인정 여부는 항상 상담역 확인으로 넘긴다.
 
-   계산 함수를 engine.js가 아니라 여기 둔 이유: 지금은 이 화면 하나만 쓰는 계산이라서.
-   자격 판정(Eligibility)이나 전략(Strategy)이 이 결과를 갖다 쓰게 되면 그때 옮긴다. */
+   판정 함수(어느 질문이 보이는가 · 결과 논조)는 src/incomeCheck.js에 있다 — 화면 없이 돌려 볼 수 있게. */
 import { useState } from "react";
 import { ACTIVE_INCOME_TYPES } from "./data/incomeRules.js";
+import { typeOf, visibleChecklist, incomeCheckResult } from "./incomeCheck.js";
 import { C } from "./data.js";
 import { BackButton, Section, eyebrow, h1, fine, pill, ghostBtn } from "./ui.jsx";
 
@@ -38,45 +38,6 @@ const GROUP_ORDER = ["employed", "leave-return", "daily", "business", "pension",
   .filter((g) => ACTIVE_INCOME_TYPES.some((t) => t.group === g));
 
 const typesInGroup = (groupKey) => ACTIVE_INCOME_TYPES.filter((t) => t.group === groupKey);
-const typeOf = (typeKey) => ACTIVE_INCOME_TYPES.find((t) => t.incomeType === typeKey) ?? null;
-
-/* 조건부 질문(예: "20% 넘게 차이나요?"에 '네'라고 답했을 때만 다음 질문)을 걸러낸다.
-   조건이 가리키는 이전 질문이 아직 안 채워졌으면 이 질문도 아직 안 보인다. */
-function visibleChecklist(type, answers) {
-  return type.checklist.filter((q) => {
-    if (!q.condition) return true;
-    const depIdx = answers[q.condition.dependsOn];
-    if (depIdx == null) return false;
-    const depQ = type.checklist.find((x) => x.id === q.condition.dependsOn);
-    return depQ.choices[depIdx].pass === q.condition.답;
-  });
-}
-
-/* 지금 보이는 질문에 전부 답했는지 = 결과를 계산할 수 있는지. */
-export function incomeCheckReady(value) {
-  const type = typeOf(value.typeKey);
-  if (!type) return false;
-  return visibleChecklist(type, value.answers).every((q) => value.answers[q.id] != null);
-}
-
-/* 답변 → 결과. 기본논조가 amber인 유형(일환산·휴직·소득추정 등, 애초에 액면가와
-   산정법이 다른 경우)은 체크리스트 답과 무관하게 항상 노랑이다 — 체크리스트는 그때
-   어떤 메모를 보여줄지만 정한다. 기본논조가 green인 유형은 질문 하나라도 "pass:false"로
-   답해지면 노랑으로 떨어진다. 준비가 안 됐으면 null(화면이 결과 대신 다음 질문을 그린다). */
-export function incomeCheckResult(value) {
-  const type = typeOf(value.typeKey);
-  if (!type || !incomeCheckReady(value)) return null;
-  const visible = visibleChecklist(type, value.answers);
-  const picked = visible.map((q) => ({ q, choice: q.choices[value.answers[q.id]] }));
-  /* "20% 넘게 차이나요?"처럼 위험 답변이 후속 질문(조건부)을 여는 경우, 그 후속 질문의
-     답이 최종 결론이다 — 앞 질문 자체의 pass:false는 "final" 판정에서 빼야 한다.
-     안 그러면 후속 질문에서 "상시소득이라 괜찮다"고 답해도 계속 노랑에 갇힌다. */
-  const hasVisibleFollowUp = (qid) => visible.some((v) => v.condition?.dependsOn === qid);
-  const failed = picked.some((p) => p.choice.pass === false && !hasVisibleFollowUp(p.q.id));
-  const tone = type.baseTone === "amber" || failed ? "amber" : "green";
-  const notes = picked.filter((p) => p.choice.note).map((p) => p.choice.note);
-  return { tone, type, notes };
-}
 
 export default function IncomeCheck({ value, onChange, onBack }) {
   const [showDetail, setShowDetail] = useState(false);

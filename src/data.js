@@ -46,6 +46,7 @@ export const REGION_CAP = [
      method "interest"               이자만. 원금은 넣지 않는다.
      method "principal"              잔액 ÷ years. 이자는 넣지 않는다.
      method "actual"                 실제 1년 원리금. 잔액으로 나누지 않는다.
+   inFundDti: false = 디딤돌 DTI의 '기타부채'에 넣지 않는다(주담대는 ②가 아니다 — didimdol.md 3절). 빼면 넣는다.
    월상환액·만기 필드를 넣지 말 것. 화면에서 묻지 않는 값이다. */
 export const DEBT_KINDS = [
   // 신용과 같은 식. 입력값은 사용액이 아니라 한도 전액. 이자는 실제 금리 + 스트레스 금리.
@@ -55,7 +56,8 @@ export const DEBT_KINDS = [
   // 원금은 넣지 않는다. 이자는 실제 금리 + 스트레스 금리.
   { key: "jeonse", label: "전세대출 잔액", max: 80000, dsr: { method: "interest" } },
   // 실제 갚는 1년 원리금. 잔액을 만기로 나누지 않는다.
-  { key: "mortgage", label: "주택담보 잔액", max: 150000, dsr: { method: "actual" } },
+  // 디딤돌 DTI ②(기타부채)는 주담대를 뺀 대출이다. 그래서 이 종류는 디딤돌 이자 합계에 넣지 않는다.
+  { key: "mortgage", label: "주택담보 잔액", max: 150000, dsr: { method: "actual" }, inFundDti: false },
   // 원금은 잔액 ÷ 8년. 이자는 실제 금리 + 스트레스 금리.
   { key: "nonHome", label: "비주택 담보 잔액", max: 30000, dsr: { method: "principalPlusInterest", years: 8 } },
   // TODO: 카드대출 원금은 약정만기, 최장 3년. 만기를 안 물어 3년으로 고정. 보험사 대출도 이 칸에 있다.
@@ -100,12 +102,15 @@ export const PRODUCTS = {
        연간 이자와 본건 원리금균등은 (calcRate + stressRate)로 산정한다. 화면 금리(rateLabel)에는 더하지 않는다.
        cap: null = 상품 자체 한도가 없다 → 그 자리는 지역별 cap이 대신 건다(regionCapped: true → REGION_CAP).
        offsetsRoomDeduction: true = MCI 가입으로 방공제 상쇄.
-       capacityModel 없음 = 은행 DSR(보수적 기본값). DEBT_VIEW.bank(products/limit.js)가 부채를 원리금으로 본다. */
+       capacityModel 없음 = 은행 DSR(보수적 기본값). DEBT_VIEW.bank(products/limit.js)가 부채를 원리금으로 본다.
+       incomeBasis: "borrower" = 차주단위 소득. 배우자 소득은 은행탭에서 '합산'을 고른 경우만 더한다.
+         예비배우자는 넣지 않는다(bank.md 3절). 없으면 "household" = 정부탭의 부부합산(예비배우자 포함). */
   bank: {
     key: "bank", name: "일반 주택담보대출", rateLabel: "연 4%대",
     calcRate: RULE.loanRate, stressRate: 0.03, ratio: RULE.DSR, years: RULE.loanYears,
     /* LTV 폴백 = 일반차주. 실제 비율은 ltvFromTable → engine.regulatoryLtv (bank.md 1절). */
     LTV: LTV_TABLE[REGION].noHome, ltvFromTable: true, offsetsRoomDeduction: true, cap: null, regionCapped: true, leadTime: "약 2~4주",
+    incomeBasis: "borrower",
   },
 };
 

@@ -6,6 +6,7 @@ export const BOGEUMJARI_RULES = [
   {
     key: "bogeumjari", product: "bogeumjari", name: "보금자리론", enabled: true,
     requires: [
+      { flags: ["adult"], label: "민법상 성년(만 19세 이상)" },
       { flags: ["noHome"], label: "무주택" },
     ],
     incomeCap: [

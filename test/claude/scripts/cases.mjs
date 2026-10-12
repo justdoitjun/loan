@@ -1,4 +1,4 @@
-import { E, D, P, V, L, R, GEO, BANKDSR, INCOME, UNITS, RAW, unit, ELIG, PERSON, cards, strategy, confirmed, check, r0, dump } from "./h.mjs";
+import { E, D, P, V, L, R, GEO, BANKDSR, INCOME, IC, UNITS, RAW, unit, ELIG, PERSON, cards, strategy, confirmed, check, r0, dump } from "./h.mjs";
 
 const rough = (u, inc) => E.evaluate(u, E.repaymentCapacity(inc, D.RULE.DSR, D.RULE.loanRate, D.RULE.loanYears, 0));
 const card = (res, key) => res.passed.find((p) => p.key === key);
@@ -29,7 +29,7 @@ check("DA-11", "구 개수", GEO.GUS.length, 25);
 }
 
 // person shortcuts
-const bankOnly = (own, extra = {}) => PERSON(own, ELIG({ homeCount: 0, firstTime: false, hasSpouse: false, ...extra }));
+const bankOnly = (own, extra = {}) => PERSON(own, ELIG({ homeCount: 0, firstTime: false, bankIncomeJoint: false, ...extra }));
 {
   // FS-30/31 (F-02): bank-only answers then list
   const p = bankOnly(4000, { firstTime: false });
@@ -38,9 +38,9 @@ const bankOnly = (own, extra = {}) => PERSON(own, ELIG({ homeCount: 0, firstTime
   check("FS-31/F-02", "성원2 정밀(규칙 기대=은행 2억41만)", [r0(sw.loan), sw.best?.product], [20041, "bank"], "현재 코드가 보금자리 cap 3.6억을 낸다면 F-02 재현");
   check("FS-31/F-02b", "은행 카드는 2억41만", r0(card(cards(unit("성원2", 84.78, "중계동"), p, "bank"), "bankMortgage").rough), 20041);
   check("X-12", "정부 무주택 아니오 → personReady", P.personReady(PERSON(4000, ELIG({ ownBirthday: "1990-01-01", hasSpouse: false, homeCount: 1 }))), false);
-  check("X-13", "은행 keep → personReady", P.personReady(PERSON(4000, ELIG({ homeCount: 1, disposeExisting: false, hasSpouse: false }))), false);
+  check("X-13", "은행 keep → personReady", P.personReady(PERSON(4000, ELIG({ homeCount: 1, disposeExisting: false, bankIncomeJoint: false }))), false);
   check("X-14", "은행 없어요 → ready", P.personReady(bankOnly(4000)), true);
-  check("X-15", "처분조건부 → ready(생애최초 무관)", P.personReady(PERSON(4000, ELIG({ homeCount: 1, disposeExisting: true, hasSpouse: false }))), true);
+  check("X-15", "처분조건부 → ready(생애최초 무관)", P.personReady(PERSON(4000, ELIG({ homeCount: 1, disposeExisting: true, bankIncomeJoint: false }))), true);
   check("X-16", "39세 청년 미답", P.personReady(PERSON(4000, ELIG({ ownBirthday: "1990-01-01", hasSpouse: false, homeCount: 0, firstTime: true, marital: "single" }))), false);
 }
 
@@ -170,7 +170,7 @@ const gov = (u, own, elig) => cards(u, PERSON(own, elig), "gov");
   check("BK-21/F-01", "예비배우자 은행 DSR 미합산(규칙 2억41만)", s.parts.dti, 20041, "F-01: 40082면 재현");
   // N-01 married + bank 본인 소득만 → withSpouse clears marital
   const married = ELIG({ ownBirthday: "1990-01-01", hasSpouse: true, homeCount: 0, firstTime: true, marital: "married", marriedWithin7: true, spouseBand: "3to5", hasDreamAccount: false });
-  const after = P.withSpouse(married, false);
+  const after = P.withBankJoint(married, false);   // 은행 '본인 소득만' = withBankJoint (가족정보 토글 withSpouse와 분리)
   check("N-01", "기혼이 은행 '본인 소득만' → 정부 결혼 답 유지돼야", [after.marital, after.marriedWithin7, P.eligReady(after)], ["married", true, true], "null이면 정부 답이 지워진다");
   // BK-31..37
   const sw = unit("성원2", 84.78, "중계동");
@@ -191,11 +191,11 @@ const gov = (u, own, elig) => cards(u, PERSON(own, elig), "gov");
   const lv = P.leverOf(PERSON(8000, m80s), 80000, null, false);
   check("BK-37", "ceilingAt 9천 지점", r0(L.ceilingAt("bank", lv).limit), 45092);
   // E debts
-  const pb = (debts, own = 4000) => strategy(zh, PERSON(own, ELIG({ homeCount: 0, firstTime: true, hasSpouse: false }), { detail: confirmed(debts) }), "bankMortgage").parts.dti;
+  const pb = (debts, own = 4000) => strategy(zh, PERSON(own, ELIG({ homeCount: 0, firstTime: true, bankIncomeJoint: false }), { detail: confirmed(debts) }), "bankMortgage").parts.dti;
   check("BK-41..48", "부채 7종 DSR", [pb({ minus: 1000 }), pb({ credit: 1000 }), pb({ jeonse: 1000 }), pb({ mortgage: 1000 }), pb({ nonHome: 1000 }), pb({ cardIns: 1000 }), pb({ auto: 1000 }), pb({ credit: 1000, auto: 1000 })], [16471, 16471, 18976, 20041, 17411, 15866, 15866, 12296]);
   check("BK-49", "소득1000 신용2000 → 0", pb({ credit: 2000 }, 1000), 0);
   check("BK-51", "종류없음 285", r0(BANKDSR.bankExistingAnnual({ balance: 1000 })), 285);
-  const s63 = strategy(zh, PERSON(4000, ELIG({ homeCount: 0, firstTime: true, hasSpouse: false }), { detail: confirmed() }), "bankMortgage");
+  const s63 = strategy(zh, PERSON(4000, ELIG({ homeCount: 0, firstTime: true, bankIncomeJoint: false }), { detail: confirmed() }), "bankMortgage");
   check("BK-63/F-14", "은행만 본인소득 → 라벨 인정소득", s63.incomeLabel, "인정소득");
   check("BK-64", "은행 소득 최대 3억", s63.incomeMax, 30000);
 }
@@ -208,7 +208,7 @@ const gov = (u, own, elig) => cards(u, PERSON(own, elig), "gov");
   check("ST-21", "P-담보", [s.parts.ltv, s.parts.dti, s.parts.cap, s.binding], [15500, 47438, 20000, "ltv"]);
   s = strategy(dj, pd(800), "general");
   check("ST-22", "P-DTI", [s.parts.dti, s.binding, r0(s.cash)], [9488, "dti", 13462]);
-  s = strategy(zh, PERSON(4000, ELIG({ homeCount: 0, firstTime: true, hasSpouse: false }), { detail: confirmed() }), "bankMortgage");
+  s = strategy(zh, PERSON(4000, ELIG({ homeCount: 0, firstTime: true, bankIncomeJoint: false }), { detail: confirmed() }), "bankMortgage");
   check("ST-23", "P-은행", [s.parts.ltv, s.parts.dti, s.parts.region, s.binding], [43640, 20041, 60000, "dti"]);
   check("ST-24/F-07", "주택담보 1천 → DTI 그대로(규칙)", strategy(dj, pd(800, { mortgage: 1000 }), "general").parts.dti, 9488, "F-07: 8432면 재현");
   check("ST-25", "신용 1천", strategy(dj, pd(800, { credit: 1000 }), "general").parts.dti, 8432);
@@ -223,9 +223,9 @@ const gov = (u, own, elig) => cards(u, PERSON(own, elig), "gov");
   check("ST-35", "6000 끝, 게이지 천장", [r0(s.reach.limit), r0(s.gaugeCeiling)], [10565, 16065]);
   s = strategy(dj, PERSON(6000, single90(false), { detail: confirmed({ jeonse: 60000 }) }), "general");
   check("ST-37", "전세6억 DTI 7827, 소득칸 상한", [s.parts.dti, s.binding, s.incomeMax - 6000], [7827, "dti", 0]);
-  s = strategy(zh, PERSON(9000, ELIG({ homeCount: 0, firstTime: true, hasSpouse: false }), { detail: confirmed() }), "bankMortgage");
+  s = strategy(zh, PERSON(9000, ELIG({ homeCount: 0, firstTime: true, bankIncomeJoint: false }), { detail: confirmed() }), "bankMortgage");
   check("ST-42/F-03", "담보 벽이면 inert(규칙)", [s.parts.ltv, s.binding, s.leversInert], [43640, "ltv", true], "F-03: leversInert=false면 재현");
-  const s42 = strategy(zh, PERSON(9000, ELIG({ homeCount: 0, firstTime: true, hasSpouse: false }), { detail: confirmed(), pull: { income: 12000 } }), "bankMortgage");
+  const s42 = strategy(zh, PERSON(9000, ELIG({ homeCount: 0, firstTime: true, bankIncomeJoint: false }), { detail: confirmed(), pull: { income: 12000 } }), "bankMortgage");
   check("ST-42b", "소득 1.2억 올려도 그대로", r0(s42.reach.limit), 43640);
   const kh = unit("금호타운(583)", 84.98, "중계동");
   const m80s = ELIG({ ownBirthday: "1980-01-01", hasSpouse: false, homeCount: 0, firstTime: false, marital: "single", hasDreamAccount: false });
@@ -247,7 +247,7 @@ const gov = (u, own, elig) => cards(u, PERSON(own, elig), "gov");
   s = strategy(us, pd(4000, {}, { offsetRoom: true }), "general");
   check("ST-62", "P-담보 네 → cap 2억", [r0(s.reach.limit), s.binding], [20000, "cap"]);
   // ST-71 / F-06 swap
-  const pbk = PERSON(4000, ELIG({ homeCount: 0, firstTime: true, hasSpouse: false }), { detail: confirmed() });
+  const pbk = PERSON(4000, ELIG({ homeCount: 0, firstTime: true, bankIncomeJoint: false }), { detail: confirmed() });
   const s71 = strategy(unit("성원2", 84.78, "중계동"), pbk, null);
   check("ST-71/F-06", "매물 교체 후 pickedKey=null → 상품", s71.picked.key, "bankMortgage", "F-06: bogeumjari면 재현");
 }
@@ -259,7 +259,7 @@ const gov = (u, own, elig) => cards(u, PERSON(own, elig), "gov");
   check("X-34", "judgeUnit 결정적", JSON.stringify(V.judgeUnit(u, per)) === JSON.stringify(V.judgeUnit(u, per)), true);
   // X-35: same product, strategy vs list differ only by room deduction
   const zh = unit("중앙하이츠", 84.21, "중계동");
-  const pp = PERSON(12000, ELIG({ homeCount: 0, firstTime: true, hasSpouse: false }), { detail: confirmed() });
+  const pp = PERSON(12000, ELIG({ homeCount: 0, firstTime: true, bankIncomeJoint: false }), { detail: confirmed() });
   const st = strategy(zh, pp, "bankMortgage"), ju = V.judgeUnit(zh, pp);
   check("X-35", "목록 − 방법 = 5,500(은행 담보 벽)", r0(ju.loan - st.reach.limit), 5500);
 }
@@ -276,7 +276,7 @@ const gov = (u, own, elig) => cards(u, PERSON(own, elig), "gov");
   });
   const t25 = ACTIVE_INCOME_TYPES.find((t) => t.displayName.startsWith("25개월"));
   check("IC-01", "estimated 그룹 없음 / 원문 2종 보존", [ACTIVE_INCOME_TYPES.some((t) => t.group === "estimated"), INCOME_TYPES.filter((t) => t.supported === false).length], [false, 2]);
-  check("IC-11/F-08", "swing20=네 → 후속 보임 (현재 코드식 condition.답)", visible(t25, { swing20: 1 }, "답").map((q) => q.id), ["swing20", "swingSteady"], "F-08");
+  check("IC-11/F-08", "swing20=네 → 후속 보임 (src/incomeCheck.js)", IC.visibleChecklist(t25, { swing20: 1 }).map((q) => q.id), ["swing20", "swingSteady"], "F-08");
   check("IC-11/F-08-fix", "같은 식에 condition.answer를 쓰면", visible(t25, { swing20: 1 }, "answer").map((q) => q.id), ["swing20", "swingSteady"]);
   check("IC-19", "effectiveDate 전부 null", INCOME_TYPES.every((t) => t.effectiveDate == null), true);
 }

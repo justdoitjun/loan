@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { SPOUSE_INCOME_BANDS, NO_HOME_EXCEPTION, C } from "../data.js";
 import { deriveFacts, judgeAll, nearIncomeCap, won, eok, cashNeededOf } from "../engine.js";
 import { GOV_RULES } from "../products/index.js";
-import { bucketOf, filledAge, eligSteps, withSpouse } from "../person.js";
+import { bucketOf, filledAge, eligSteps, withSpouse, withHomeCount } from "../person.js";
 import { Section, ClosedCard, Placeholder, eyebrow, h1, card, fine, inputBox, pill } from "../ui.jsx";
 import { YesNo, SpouseIncomeTrack, AnswersDropdown, SkippedNote } from "./shared.jsx";
 
@@ -47,7 +47,7 @@ export default function Gov({ ctx, elig, setElig, onPick }) {
 
   /* 배우자 토글은 뒤 질문들과 모순을 만들 수 있다 → 바뀌는 순간 어긋난 답만 조용히 비운다.
      (경고를 띄우고 사용자에게 치우게 하는 것보다, 애초에 모순이 못 남게 하는 쪽) */
-  const setHasSpouse = (v) => setElig((s) => withSpouse(s, v));   // 정리 규칙은 person.withSpouse 한 곳(은행탭도 같은 토글)
+  const setHasSpouse = (v) => setElig((s) => withSpouse(s, v));   // 정리 규칙은 person.withSpouse 한 곳(은행탭의 합산 토글은 withBankJoint)
 
   const pickBucket = (b) => setElig((s) => ({ ...s, marital: b.marital, marriedWithin7: b.within7 }));
   const pickBand = (k) => setElig((s) => ({ ...s, spouseBand: k, spouseIncomeRaw: "" })); // 밴드 바뀌면 정밀값 무효
@@ -95,7 +95,7 @@ export default function Gov({ ctx, elig, setElig, onPick }) {
               <YesNo label="지금 가진 집이 없나요?"
                 desc="같이 살려고 하는 가족들은 모두 무주택이어야 해요."
                 value={elig.homeCount === null ? null : gateOpen}
-                onPick={(v) => set("homeCount", v ? 0 : 1)} />
+                onPick={(v) => setElig((s) => withHomeCount(s, v ? 0 : 1))} />
               {elig.homeCount !== null && !gateOpen ? <ClosedCard exception={NO_HOME_EXCEPTION} /> : null}
             </div>
           )}

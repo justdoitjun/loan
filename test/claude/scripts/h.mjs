@@ -11,6 +11,7 @@ export const G = await import(`${SRC}/data/geo/geo_code.js`);
 export const GEO = await import(`${SRC}/geo.js`);
 export const BANKDSR = await import(`${SRC}/engine_bank_dsr.js`);
 export const INCOME = await import(`${SRC}/data/incomeRules.js`);
+export const IC = await import(`${SRC}/incomeCheck.js`);
 
 const SNAP = JSON.parse(readFileSync(new URL("../../../src/data/seoul/units_20261011.json", import.meta.url), "utf8"));
 const GU_OF = {};
@@ -38,30 +39,13 @@ export function cards(u, person, tab) {
   return { f, ctx, ...E.judgeAll(f, rules) };
 }
 
-// Mirror of Strategy.jsx + Cockpit calculations.
+// Strategy.jsx 계산 = verdict.strategyView (화면은 그 결과를 그리기만 한다). 예전엔 여기서 식을 따라 했다.
 export function strategy(u, person, pickedKey) {
-  const ctx = E.buildCtx({ unit: u, ownIncome: person.ownIncome, elig: person.elig });
-  const { passed } = E.judgeAll(E.deriveFacts(ctx));
-  const picked = passed.find((p) => p.key === pickedKey) ?? passed[0] ?? null;
-  if (!picked) return { picked: null };
-  const incomeCap = picked.income.value;
-  const ready = P.detailReady(person.detail);
-  if (!ready) return { picked, ready };
-  const base = P.leverOf(person, u.price, incomeCap, false);
-  const lever = P.leverOf(person, u.price, incomeCap, true);
-  const roomOffset = lever.offsetRoom === true;
-  const reach = L.limitAt(picked.product, { ...lever, offsetRoom: roomOffset }, picked.limit);
-  const baseCeil = L.ceilingAt(picked.product, base, picked.limit);
-  const roomOffCeil = L.ceilingAt(picked.product, { ...base, offsetRoom: true }, picked.limit);
-  const baseReach = L.limitAt(picked.product, base, picked.limit);
-  const leverRoom = Math.max(baseCeil.limit - baseReach.limit, 0);
-  const hasSpouse = ctx.marital !== "single";
+  const v = V.strategyView(u, person, pickedKey);
+  if (!v.picked || !v.ready) return v;
   return {
-    ctx, picked, ready, base, lever, reach, baseCeil, roomOffCeil, baseReach,
-    leversInert: leverRoom < 100, gaugeCeiling: Math.max(baseCeil.limit, roomOffCeil.limit),
-    incomeMax: base.incomeMax, cash: E.cashNeededOf(u.price, reach.limit),
-    incomeLabel: hasSpouse ? "인정소득 (부부합산)" : "인정소득",
-    parts: Object.fromEntries(reach.parts.map((p) => [p.key, Math.round(p.value)])), binding: reach.binding.key,
+    ...v,
+    parts: Object.fromEntries(v.reach.parts.map((p) => [p.key, Math.round(p.value)])), binding: v.reach.binding.key,
   };
 }
 

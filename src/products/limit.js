@@ -12,6 +12,7 @@
        debts      { [DEBT_KINDS.key]: 금액 }   · 종류별. 없으면 debt 숫자를 쓴다
        offsetRoom 방공제 상쇄 여부              · null = 상품 기본값. true면 안 빼고, false면 뺀다
        ltv        은행 규제 LTV 플래그          · 없으면 일반차주. 소득·가격은 위 필드를 쓴다
+                                               ltv.incomeGap = 부부합산 − 차주단위(서민 소득 요건은 부부합산)
    월상환액은 묻지도 넘기지도 않는다.
    은행의 종류별 연 상환액은 engine_bank_dsr.js가 잔액을 해석한다. 여기선 raw 부채를 넘긴다.
    돌려주는 것: { limit, parts, binding } — limitParts와 같은 모양. */
@@ -31,7 +32,8 @@ const viewOf = (key) => DEBT_VIEW[key] ?? "principalAndInterest";
    debts가 없으면 debt 숫자 하나를 쓴다. */
 function ltvRateOf(productKey, lever) {
   if (!PRODUCTS[productKey].ltvFromTable) return null;
-  return regulatoryLtv({ ...(lever.ltv || {}), income: lever.income, price: lever.price }).rate;
+  const gap = lever.ltv?.incomeGap ?? 0;
+  return regulatoryLtv({ ...(lever.ltv || {}), income: lever.income + gap, price: lever.price }).rate;
 }
 
 export function limitAt(productKey, lever, capOverride = null) {
@@ -47,7 +49,7 @@ export function ceilingAt(productKey, lever, capOverride = null) {
      천장은 슬라이더 끝이 아니라, 부채 0에서 한도가 가장 커지는 소득이다.
      서민 행이 살아 있는 구간은 상한 이하에서 소득이 높을수록 DSR만 늘므로, 상한과 최댓값 두 점만 보면 된다. */
   const incomes = [lever.incomeMax];
-  const cap = REAL_DEMAND.incomeCap;
+  const cap = REAL_DEMAND.incomeCap - (lever.ltv?.incomeGap ?? 0);   // 부부합산이 9천만원이 되는 차주 소득
   if (PRODUCTS[productKey].ltvFromTable && lever.income <= cap && cap < lever.incomeMax) incomes.push(cap);
   return incomes
     .map((income) => limitAt(productKey, { ...lever, debt: 0, debts: {}, income }, capOverride))

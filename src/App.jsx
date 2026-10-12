@@ -8,7 +8,8 @@ import { EMPTY_PERSON, personReady, emptyDebts } from "./person.js";
 import { judgeUnits } from "./verdict.js";
 import Eligibility from "./Eligibility.jsx";
 import Strategy from "./Strategy.jsx";
-import IncomeCheck, { incomeCheckResult } from "./IncomeCheck.jsx";
+import IncomeCheck from "./IncomeCheck.jsx";
+import { incomeCheckResult } from "./incomeCheck.js";
 
 export default function App() {
   const [person, setPerson] = useState(EMPTY_PERSON);
@@ -77,15 +78,14 @@ export default function App() {
     setIncomeAsk(null);
   }
 
-  /* 조종간 미니지도에서 점을 눌렀을 때 — 화면 전환 없이 '목표 매물'만 갈아끼운다.
-     ⚠️ 사람 상태(자격·부채·레버)는 건드리지 않는다. 그게 이 인터랙션의 전부다 —
-        매물만 바뀌고 나머지는 그대로여서 재질문 없이 즉시 다시 판정된다.
-     pickedKey는 비운다: 새 매물에선 통과 목록이 달라져 이전 선택이 없을 수 있고,
-     Strategy가 passed[0]으로 알아서 대체한다. */
+  /* 방법 화면에서 다른 매물을 골랐을 때 — 화면 전환 없이 '목표 매물'만 갈아끼운다.
+     ⚠️ 사람 상태(자격·부채·레버)는 건드리지 않는다. 고른 상품(pickedKey)도 그대로 둔다 —
+        상품은 사람이 고른 것이다. 새 매물에서 안 열리면 방법 화면이 가장 크게 열리는 길로 대신 보여 주고
+        그렇다고 말한다. 다시 열리는 매물로 가면 고른 상품으로 돌아온다. */
   function swapUnit(id) {
     const next = scoped.find((d) => d.id === id);
     if (!next) return;
-    setUnit(next); setPickedKey(null);
+    setUnit(next);
   }
 
   const overlay = sheet || modalUnit || incomeAsk;
@@ -99,7 +99,7 @@ export default function App() {
             <div style={eyebrow}>내집마련</div>
             <PlacePath place={place} sheet={sheet} onGu={() => setSheet("gu")} onDong={() => setSheet("dong")} />
           </div>
-          <h1 style={h1}>내 소득으로<br />가능한 집은 얼마일까요?</h1>
+          <h1 style={h1}>내 소득으로<br />가능한 대출은 얼마일까요?</h1>
           <div style={{ marginTop: 16 }}>
             <Slider label="나의 연소득" value={income} min={0} max={12000} step={100} onChange={(v) => patch("ownIncome", v)} display={won(income) + "원"} />
           </div>
@@ -122,7 +122,7 @@ export default function App() {
               <div>
                 <div style={{ fontSize: 15, color: C.ink, fontWeight: 700 }}>{r.name}</div>
                 <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 2 }}>전용 {r.areaM2}㎡ · 시세 {eok(r.price)}</div>
-                <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 3 }}>자본금 {won(r.cashNeeded)}원</div>
+                <div style={{ fontSize: 12, color: C.inkSoft, marginTop: 3 }}>필요 현금 {won(r.cashNeeded)}원</div>
               </div>
               <span style={{ fontSize: 15, color: C.greenDeep, fontWeight: 800, textAlign: "right", flex: "0 0 auto" }}>
                 대출 {won(r.loan)} ›
@@ -151,6 +151,7 @@ export default function App() {
           detail={person.detail} setDetail={setDetail}
           pull={person.pull} setPull={setPull}
           onSwapUnit={swapUnit}
+          onPickProduct={setPickedKey}
           units={scoped}
           onBack={() => { clearStrategy(); setStep("eligibility"); }} />
       )}

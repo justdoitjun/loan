@@ -19,7 +19,7 @@
 |---|---|
 | `src/App.jsx` | 지역(시·구·동)+소득+매물 목록 → 소득 확인(Yes/No) → 정부/은행 팝업. 뒤로 가면 방법 화면 가정(부채·레버)을 비운다. **단계 오케스트레이션 + 사람상태 소유** |
 | `src/person.js` | **사람상태 스키마 + 순수 판단**(EMPTY_PERSON·eligSteps·detailReady·leverOf). JSX 금지 |
-| `src/verdict.js` | **`judgeUnit(매물, 사람)` — 매물별 한도·필요 현금 순수 함수.** 목록 숫자 갱신의 단일 진입점 |
+| `src/verdict.js` | **`judgeUnit(매물, 사람)` — 매물별 한도·필요 현금 순수 함수.** 목록 숫자 갱신의 단일 진입점. 답을 끝낸 탭의 상품만 본다(`person.answeredRules`). 방공제는 늘 상품 기본값. **`strategyView(매물, 사람, pickedKey)` — 방법 화면 계산 전부**(자격은 `judgeUnit`과 같은 판정, 소득 가정 상한, 손잡이 여부, 다음 길) |
 | `src/Eligibility.jsx` | **자격 화면 껍데기**(탭·매물카드). 자격을 묻는 유일한 입구. 본문은 탭별로 아래 두 파일 |
 | `src/eligibility/gov.jsx` | **정부대출 자격 질문 + 가능 상품 목록.** 디딤돌·보금자리 판정이 여기 |
 | `src/eligibility/bank.jsx` | **은행대출 탭.** 질문 2개(주택 보유 상태 · 배우자 소득) → 일반 주담대 카드. 은행 질문이 늘면 여기만 고친다 |
@@ -27,6 +27,7 @@
 | `src/Strategy.jsx` | **방법 화면.** 부채 입력 → 필요 현금 + 게이지 → 기존 대출을 줄이면 / 소득이 인정되면 / 방 공제 보전(항상 펼침, 기본 아니오) |
 | `src/DetailInfo.jsx` | **부채를 종류별로 입력**(`data.DEBT_KINDS`) = 가정의 시작 위치. Strategy 상단 |
 | `src/IncomeCheck.jsx` | **소득 신뢰도 자가진단.** 소득유형 선택 → 체크리스트 → 초록/노랑 논조 |
+| `src/incomeCheck.js` | 자가진단 판정 순수 함수(`visibleChecklist`·`incomeCheckReady`·`incomeCheckResult`). 조건 키는 데이터 그대로 `condition.answer`. JSX 금지 |
 | `src/engine.js` | 계산·판정 전부(중복 정의 금지). JSX 금지. 은행 기존부채 연상환은 `engine_bank_dsr.js`를 호출 |
 | `src/engine_bank_dsr.js` | **은행 DSR 기존 부채의 종류별 연 상환액.** 파라미터는 `DEBT_KINDS[].dsr`. 디딤돌은 호출하지 않음 |
 | `src/data.js` | 예산규칙·상품 **금융 파라미터**·`LEVER`(레버 범위)·화면 상수. 매물은 여기 없다(`src/units.js`). 로직 금지 |
@@ -69,7 +70,10 @@
   화면을 오가도 유지된다. **매물을 바꿔도 초기화하지 않는다** — 그게 재질문을 없앤 지점이다.
   보유 현금은 여기 없다. 필요 현금은 시세와 대출에서 그때그때 계산한다(`engine.cashNeededOf`).
 - **화면상태**(App의 개별 useState) — `{ step, unit, kind, pickedKey, modalUnit, place }`.
-  "지금 어디를 보고 있나"만. `place`는 시·구·동. 매물을 바꾸면 `pickedKey`만 리셋한다(통과 목록이 달라지므로).
+  "지금 어디를 보고 있나"만. `place`는 시·구·동.
+  `pickedKey`(고른 상품)는 방법 화면에서 매물을 바꿔도 **지우지 않는다** — 사람이 고른 것이다.
+  새 매물에서 그 상품이 안 열리면 방법 화면이 가장 크게 열리는 길로 대신 보여 주고 그렇다고 말한다(`strategyView.pickedMissing`).
+  뒤로 가기와 정부/은행 팝업에서 새로 고를 때만 비운다.
 - ⚠️ **가정값(`pull`)을 Strategy 로컬 state로 되돌리지 말 것.** 목록이 같은 값을 읽어서
   기존 대출·소득 가정을 바꾸면 모든 매물의 대출·필요 현금이 다시 계산된다. 로컬로 내리면 그 연결이 끊긴다.
 - ⚠️ `person.js`·`verdict.js`에 **JSX/React를 import하지 말 것.** 화면 없이 돌아가야
@@ -78,6 +82,9 @@
 **첫 화면은 지도가 없다.** 소득 슬라이더와 매물 목록이 한 화면이다.
 `personReady(person)`(=정부 **또는** 은행 자격 답변 완료) 전에는 DSR 근사 한도(`engine.evaluate`),
 그 후에는 매물별 정밀 한도(`judgeUnit`). 전환 시 목록의 대출·필요 현금이 바뀌는 게 사건이다.
+정밀 숫자는 **답을 끝낸 탭의 상품만** 쓴다(`person.answeredRules`). 은행만 답했으면 은행 상품만, 정부를 끝까지 답했으면 정부 상품에 은행을 더한다.
+은행 답(합산 여부)은 은행탭에서 고른 값이 먼저고, 없으면 **정부탭이 다 찼을 때만** 정부 답을 빌린다(`person.bankJointOf`) —
+정부 질문 도중의 가족정보만으로 정밀 모드가 켜지면 안 된다.
 
 ## 파일별 경계
 

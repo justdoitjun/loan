@@ -11,15 +11,13 @@
                            기본은 아니오. 네로 바꾸면 보전으로 계산하고, 누가 받을 수 있는지는 팝업.
 
    화면에 조종간·엔진·레버를 쓰지 않는다.
-   계산은 직접 하지 않는다. products/limit.js의 limitAt/ceilingAt에 가정값을 넘기고 결과만 그린다.
+   계산은 직접 하지 않는다. verdict.strategyView가 자격·한도·천장·손잡이 여부를 전부 만들고, 여기선 그리기만 한다.
    ⚠️ 자격은 여기서 절대 다시 묻지 않는다. 자격은 Eligibility 화면에서만 받는다
       (정부 → eligibility/gov.jsx, 은행 → eligibility/bank.jsx). */
 import { useId, useMemo, useRef, useState } from "react";
 import { PRODUCTS, LEVER, DEBT_KINDS, RULE, C } from "./data.js";
-import { deriveFacts, judgeAll, won, eok, cashNeededOf, monthlyInstallment } from "./engine.js";
-import { limitAt, ceilingAt } from "./products/limit.js";
-import { leverOf, detailReady } from "./person.js";
-import { judgeUnits } from "./verdict.js";
+import { won, eok, monthlyInstallment } from "./engine.js";
+import { judgeUnits, strategyView } from "./verdict.js";
 import { BackButton, Section, Stat, useTween, eyebrow, h1, card, fine, rangeFill, useOverlayLock } from "./ui.jsx";
 import DetailInfo from "./DetailInfo.jsx";
 
@@ -29,9 +27,9 @@ const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
    이 화면에 있는 동안 지도가 같은 값을 읽어서, 레버를 움직이는 순간 모든 매물이 다시 칠해진다.
    여기 useState로 되돌리지 말 것.
    뒤로 가기(가능한 대출 목록 → 매물 목록)는 선택을 다시 하는 것이라, App이 pull과 부채 확정을 비운다. */
-export default function Strategy({ ctx, person, pickedKey, detail, setDetail, pull, setPull, onSwapUnit, units, onBack }) {
-  const { passed } = judgeAll(deriveFacts(ctx));
-  const picked = passed.find((p) => p.key === pickedKey) ?? passed[0] ?? null;
+export default function Strategy({ ctx, person, pickedKey, detail, setDetail, pull, setPull, onSwapUnit, onPickProduct, units, onBack }) {
+  const view = strategyView(ctx.unit, person, pickedKey);
+  const { picked, pickedMissing, ready } = view;
 
   /* 자격이 통과한 게 하나도 없으면 여기 올 일이 없다. 방어만. */
   if (!picked) {
@@ -44,25 +42,6 @@ export default function Strategy({ ctx, person, pickedKey, detail, setDetail, pu
     );
   }
 
-  const price = ctx.unit.price;
-  const ready = detailReady(detail);
-
-  /* 소득 레버의 상한은 이 상품의 소득상한에서 잘린다.
-     소득을 더 올리면 한도가 아니라 '자격'이 닫히기 때문 — 거짓 희망을 만들지 않으려면 여기서 막아야 한다.
-     null = 소득상한이 없는 상품(은행) → leverOf가 3억(LEVER.incomeMax)까지 연다. */
-  const incomeCap = picked.income.value;
-
-  /* DetailInfo가 답한 값 = 레버의 시작 위치. 다시 답하면 당긴 건 초기화한다(기준이 바뀌었으니까).
-     둘 다 person.js의 leverOf가 만든다 — 지도(verdict.judgeUnit)가 쓰는 것과 같은 함수다.
-     여기서 레버 모양을 따로 조립하면 지도와 조종간이 서로 다른 값을 보게 된다. */
-  const base = ready ? leverOf(person, ctx.unit.price, incomeCap, false) : null;   // 당기기 전
-  const lever = ready ? leverOf(person, ctx.unit.price, incomeCap, true) : null;   // 당긴 후
-
-  /* 소득 레버가 위로 열린 폭. 상한은 leverOf가 정한 값을 그대로 쓴다 — 여기서 다시 계산하면
-     지도와 조종간의 레버 상한이 갈린다(같은 레버가 화면마다 다르게 잘리는 버그). */
-  const incomeMax = base?.incomeMax ?? ctx.totalIncome;
-  const incomeRoom = Math.max(incomeMax - ctx.totalIncome, 0);
-
   const onDetail = (next) => { setDetail(next); setPull(null); };
   const pullLever = (k, v) => setPull((p) => ({ ...(p ?? {}), [k]: v }));
   const pullDebt = (key, v) => setPull((p) => ({ ...(p ?? {}), debts: { ...(p?.debts ?? {}), [key]: v } }));
@@ -72,16 +51,18 @@ export default function Strategy({ ctx, person, pickedKey, detail, setDetail, pu
       <BackButton onClick={onBack}>가능한 대출 목록으로</BackButton>
       <div style={eyebrow}>{picked.title}</div>
       <h1 style={h1}>어떻게 내 집으로 만들 수 있을까?</h1>
+      {/* 고른 상품이 이 매물에선 안 열리면 숨기지 않고 말한다. 고른 상품은 지우지 않는다. */}
+      {pickedMissing && (
+        <p style={{ ...fine, marginTop: -4 }}>고른 대출은 이 집에선 안 열려요. 가장 크게 열리는 길로 보여 드려요.</p>
+      )}
 
       <DetailInfo value={detail} onChange={onDetail} />
 
       {/* 부채 확정 전에는 레버를 그리지 않는다 — 슬라이더를 만지작거리는 중간값으로 한도가 그려지면 안 된다. */}
       {ready && (
-        <Cockpit
-          ctx={ctx} picked={picked}
-          lever={lever} base={base} price={price}
-          incomeMax={incomeMax} incomeRoom={incomeRoom} incomeCap={incomeCap}
-          pulled={pull !== null} pullLever={pullLever} pullDebt={pullDebt} onReset={() => setPull(null)} />
+        <Cockpit view={view} price={ctx.unit.price}
+          pulled={pull !== null} pullLever={pullLever} pullDebt={pullDebt} onReset={() => setPull(null)}
+          onPickProduct={onPickProduct} />
       )}
 
       {/* 다른 매물을 볼 때만 위 내용을 접는다. 기본은 닫힘 — 조종간이 주인공이고 이건 곁가지다. */}
@@ -95,43 +76,23 @@ export default function Strategy({ ctx, person, pickedKey, detail, setDetail, pu
 /* ══════════════════════════════════════════════════════════════════════════
    방법 화면 본체 — 가정값(pull)은 위에서 받고, 여기서는 가정 → 한도 → 결과만 그린다.
    ══════════════════════════════════════════════════════════════════════════ */
-function Cockpit({ ctx, picked, lever, base, price, incomeMax, incomeRoom, incomeCap, pulled, pullLever, pullDebt, onReset }) {
+function Cockpit({ view, price, pulled, pullLever, pullDebt, onReset, onPickProduct }) {
   const [partsOpen, setPartsOpen] = useState(true);
   const [roomHelp, setRoomHelp] = useState(false);
+  const { picked, lever, base, reach, gaugeCeiling, cash, incomeMax, incomeRoom, incomeCap, incomeLabel, roomOffset, nextPaths } = view;
   const P = PRODUCTS[picked.product];
-
-  /* ── 레버 → 모듈 → 결과 ──
-     방 공제 보전은 기본 아니오. 아직 안 고른 값(null)도 아니오와 같이 한도에서 뺀다.
-     은행·보금자리가 상쇄를 기본으로 두어도, 이 화면에서는 네를 고르기 전에는 빼지 않는다. */
-  const roomOffset = lever.offsetRoom === true;
-  const reach = limitAt(picked.product, { ...lever, offsetRoom: roomOffset }, picked.limit);
-  /* 부채·소득 천장은 시작 위치 기준. 방공제를 켜서 한도를 낮춰도 눈금이 따라 내려가면 안 된다.
-     눈금은 방공제를 뺐을 때(상쇄)까지 포함한 더 높은 쪽. */
-  const baseCeil = ceilingAt(picked.product, base, picked.limit);
-  const roomOffCeil = ceilingAt(picked.product, { ...base, offsetRoom: true }, picked.limit);
-  const gaugeCeiling = Math.max(baseCeil.limit, roomOffCeil.limit);
-  const cash = cashNeededOf(price, reach.limit);
 
   /* 숫자도 툭 바뀌지 않게 보간한다(reduced-motion이면 즉시). */
   const shownLoan = useTween(reach.limit);
   const shownCash = useTween(cash);
 
-  /* 미혼에게 "배우자 소득 합산"을 안내하면 안 된다 — 소득 레버의 설명과 창구 질문이 갈린다. */
-  const hasSpouse = ctx.marital !== "single";
-
   const incomeUp = lever.income - base.income;
   const debtKinds = DEBT_KINDS.filter((k) => base.debts[k.key] > 0);
 
-  /* 이 레버들이 '통틀어' 열 수 있는 폭 = 시작 위치(base)에서 천장까지.
-     0이면 손잡이만 있고 결과가 안 움직인다 — 벽이 담보(LTV)나 대출 한도라서
-     부채·소득으로는 안 내려가기 때문. 그때는 그 두 칸을 그리지 않는다.
-     ⚠️ 현재 위치(reach)로 재면 안 된다. 가정을 끝까지 바꾼 순간 reach == ceil이 되어
-        방금 9천만원을 열어놓고도 "이 길은 안 움직여요"라고 말하고, 슬라이더가 손 밑에서 사라진다.
-        '열 수 있는 폭'은 사용자가 어디까지 바꿨느냐와 무관한 구조적 성질이다.
-     방공제(세 번째)는 이 폭과 상관없이 항상 펼쳐 둔다. */
-  const baseReach = limitAt(picked.product, base, picked.limit);
-  const leverRoom = Math.max(baseCeil.limit - baseReach.limit, 0);
-  const leversInert = leverRoom < 100;
+  /* 기존 대출·소득으로 '통틀어' 열 수 있는 폭이 0이면(벽이 담보나 경로 한도) 두 칸을 그리지 않고
+     "이 길에선 여기까지예요"와 열린 다음 길만 준다. 판단은 strategyView.leversInert —
+     현재 위치가 아니라 시작 위치에서, 화면과 같은 방공제로 잰다. 방공제(세 번째)는 항상 펼쳐 둔다. */
+  const { leversInert } = view;
 
   return (
     <>
@@ -144,7 +105,7 @@ function Cockpit({ ctx, picked, lever, base, price, incomeMax, incomeRoom, incom
             <span style={{ fontSize: 16, fontWeight: 800, color: C.greenDeep, fontVariantNumeric: "tabular-nums" }}>약 {eok(shownLoan)}</span>
           </div>
           <div style={{ fontSize: 12, color: C.inkSoft, fontWeight: 600, textAlign: "right" }}>
-            필요 자본금{" "}
+            필요 현금{" "}
             <span style={{ fontSize: 16, fontWeight: 800, color: C.ink, fontVariantNumeric: "tabular-nums" }}>{cash <= 0 ? "없음" : `약 ${eok(shownCash)}`}</span>
           </div>
         </div>
@@ -192,7 +153,9 @@ function Cockpit({ ctx, picked, lever, base, price, incomeMax, incomeRoom, incom
 
       {/* ── ③ 레버 ──
           부채·소득은 결과가 안 움직이면 그 칸만 뺀다. 방공제는 항상 펼친다. */}
-      <Section title="③ 대출 전략" tone={pulled ? undefined : "ok"}>
+      <Section title="③ 이렇게 바꿔 보면요" tone={pulled ? undefined : "ok"}>
+
+        {leversInert && <EndOfPath nextPaths={nextPaths} onPickProduct={onPickProduct} />}
 
         {!leversInert && <div style={{ marginBottom: 8 }}>
           <LeverHead title="기존 대출을 줄이면요?" />
@@ -216,14 +179,14 @@ function Cockpit({ ctx, picked, lever, base, price, incomeMax, incomeRoom, incom
           <LeverHead title="소득이 더 인정되면요?" />
 
           {incomeRoom >= LEVER.incomeStep ? (
-            <LeverRow label={hasSpouse ? "인정소득 (부부합산)" : "인정소득"} value={lever.income} min={base.income} max={incomeMax} step={LEVER.incomeStep}
+            <LeverRow label={incomeLabel} value={lever.income} min={base.income} max={incomeMax} step={LEVER.incomeStep}
               display={won(lever.income) + "원"}
               sub={incomeUp > 0 ? `${won(base.income)} → ${won(incomeUp)} 더 인정되면` : null}
-              onChange={(v) => pullLever("income", v)} />
+              onChange={(v) => pullLever("income", v + (lever.incomeGap ?? 0))} />
           ) : (
             <div style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.6, marginBottom: 10 }}>
               {incomeCap != null
-                ? <>합산소득 상한 {won(incomeCap)}원. 더 올리면 자격이 닫혀요.</>
+                ? <>소득상한 {won(incomeCap)}원. 더 올리면 자격이 닫혀요.</>
                 : <>소득이 더 인정될 폭이 없어요.</>}
             </div>
           )}
@@ -291,7 +254,7 @@ function OtherUnits({ person, units, currentId, onSwapUnit }) {
                   </span>
                   {!on && (
                     <span style={{ fontSize: 12, fontWeight: 800, flex: "0 0 auto", color: C.greenDeep }}>
-                      자본금 {won(r.cashNeeded)} ›
+                      필요 현금 {won(r.cashNeeded)} ›
                     </span>
                   )}
                 </button>
@@ -301,6 +264,30 @@ function OtherUnits({ person, units, currentId, onSwapUnit }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* 기존 대출을 줄여도 소득이 더 인정돼도 필요 현금이 안 줄어드는 길.
+   움직이는 척하지 않는다. 벽은 ②가 이미 보여 주므로 다시 말하지 않고, 열린 다음 길만 준다. */
+function EndOfPath({ nextPaths, onPickProduct }) {
+  return (
+    <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: `1px solid ${C.line}` }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginBottom: 4 }}>이 길에선 여기까지예요.</div>
+      <div style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.6 }}>
+        기존 대출을 줄이거나 소득이 더 인정돼도 필요 현금은 그대로예요.
+      </div>
+      {nextPaths.length > 0 && (
+        <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
+          {nextPaths.map((p) => (
+            <button key={p.key} type="button" onClick={() => onPickProduct?.(p.key)}
+              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "9px 12px", borderRadius: 10, border: `1.5px solid ${C.line}`, background: "#fff", cursor: "pointer", textAlign: "left" }}>
+              <span data-fit="line" style={{ minWidth: 0, fontSize: 13, fontWeight: 700, color: C.ink }}>{p.title}</span>
+              <span style={{ flex: "0 0 auto", fontSize: 13, fontWeight: 800, color: C.greenDeep, fontVariantNumeric: "tabular-nums" }}>대출 약 {eok(p.limit)} ›</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

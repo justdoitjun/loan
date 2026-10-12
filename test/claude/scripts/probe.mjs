@@ -4,7 +4,7 @@ const single90 = (ft, extra = {}) => ELIG({ ownBirthday: "1990-01-01", hasSpouse
 // N-02: 인근 다른 매물/목록 숫자가 방공제 토글 이력(null vs false)에 따라 달라진다
 {
   const zh = unit("중앙하이츠", 84.21, "중계동");
-  const el = ELIG({ homeCount: 0, firstTime: true, hasSpouse: false });
+  const el = ELIG({ homeCount: 0, firstTime: true, bankIncomeJoint: false });
   const fresh = PERSON(12000, el, { detail: confirmed(), pull: null });
   const toggled = PERSON(12000, el, { detail: confirmed(), pull: { offsetRoom: false } }); // 네 → 아니오
   const a = V.judgeUnit(zh, fresh), b = V.judgeUnit(zh, toggled);
@@ -21,7 +21,8 @@ const single90 = (ft, extra = {}) => ELIG({ ownBirthday: "1990-01-01", hasSpouse
   check("N-03", "네 상태: 벽=DTI면 손잡이가 보여야", [s.binding, r0(s.reach.limit), s.leversInert], (x) => !(x[0] === "dti" && x[2] === true), `binding=${s.binding} limit=${r0(s.reach.limit)} inert=${s.leversInert} parts=${JSON.stringify(s.parts)}`);
   // 손잡이를 쓸 수 있었다면 얼마까지 열리는가
   const up = strategy(us, { ...p, pull: { offsetRoom: true, income: 6000 } }, "general");
-  check("N-03b", "소득을 올리면 실제로 열리는 폭", r0(up.reach.limit - s.reach.limit), (x) => x === 0, `열리는 폭 ${r0(up.reach.limit - s.reach.limit)}만 (숨긴 손잡이로 얻을 수 있던 값)`);
+  // 이 폭이 0보다 크면 손잡이가 보여야 한다(N-03). 폭 자체는 결함이 아니라 도메인 사실이다.
+  check("N-03b", "열리는 폭이 있으면 손잡이가 보인다", [r0(up.reach.limit - s.reach.limit), s.leversInert], (x) => x[0] > 0 && x[1] === false, `열리는 폭 ${r0(up.reach.limit - s.reach.limit)}만`);
 }
 
 // N-04: 정부 질문 도중(배우자 없음·무주택·생애최초까지만) 이미 정밀 모드
@@ -46,14 +47,15 @@ const single90 = (ft, extra = {}) => ELIG({ ownBirthday: "1990-01-01", hasSpouse
 // N-06: 청년 주택드림 세대주 요건 — 규칙 문서 1-4에 없다
 {
   const rule = R.DIDIMDOL_RULES.find((r) => r.key === "youthDream");
-  check("N-06", "youthDream requires (문서: 무주택·통장·39세)", rule.requires.map((r) => r.flags.flat().join("|")), ["noHome", "hasDreamAccount", "under39"]);
+  // 결정(2026-10-12): 세대주 요건을 유지하고 didimdol.md 1-4에 적는다. 성년(adult)은 5종 공통 진입.
+  check("N-06", "youthDream requires (문서 1-4: 성년·무주택·세대주·통장·39세)", rule.requires.map((r) => r.flags.flat().join("|")), ["adult", "noHome", "householdHead", "hasDreamAccount", "under39"]);
 }
 
 // N-07: stale disposeExisting — 은행 '처분' → 정부 '네'(무주택) → 정부 '아니오' → 은행 버킷
 {
-  let e = ELIG({ homeCount: 1, disposeExisting: true, hasSpouse: false });
-  e = { ...e, homeCount: 0 }; // 정부 '네'
-  e = { ...e, homeCount: 1 }; // 정부 '아니오'
+  let e = ELIG({ homeCount: 1, disposeExisting: true, bankIncomeJoint: false });
+  e = P.withHomeCount(e, 0); // 정부 '네'
+  e = P.withHomeCount(e, 1); // 정부 '아니오'
   check("N-07", "다시 묻지 않고 처분조건부로 자동 선택?", P.homeBucketOf(e), null, "dispose면 사용자가 다시 확인하지 않은 처분 약정이 살아 있다");
 }
 

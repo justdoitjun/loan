@@ -42,7 +42,10 @@
 **질문** — ① 주택 보유 상태 ② 무주택이면 생애최초 ③ 배우자 소득(DSR 합산용).
 생애최초는 LTV를 40%에서 70%로 올리므로 은행 경로에서 묻는다. 정부탭에서 이미 답했으면 다시 묻지 않는다.
 세대주·결혼·청년통장은 은행탭에서 묻지 않는다.
-답은 정부탭과 같은 `elig` 한 벌에 들어간다(`homeCount` · `disposeExisting` · `firstTime` · `hasSpouse` · `spouseBand`).
+답은 정부탭과 같은 `elig` 한 벌에 들어간다(`homeCount` · `disposeExisting` · `firstTime` · `bankIncomeJoint` · `spouseBand`).
+③은 `bankIncomeJoint`(합산 / 본인 소득만)이다. 가족정보의 배우자 유무(`hasSpouse`)와 다른 질문이라 서로를 지우지 않는다.
+은행탭에서 안 골랐으면 정부탭을 끝까지 답했을 때만 그 답을 빌린다(배우자 있음 = 합산, `person.bankJointOf`).
+진입 조건에는 **민법상 성년**도 있다(`adult`). 은행탭은 생년월일을 묻지 않으므로, 정부탭에서 미성년으로 확인된 경우만 닫힌다.
 
 ---
 
@@ -74,10 +77,11 @@ DSR(%) = ( 본건 연간 원리금 + 기존 부채 연간 원리금 ) / 연소�
 
 - **소득**: 차주단위가 원칙. 배우자 소득을 합산하면 **배우자 부채도 합산**된다 →
   화면은 "배우자 소득을 넣었으면 부채 슬라이더에도 배우자 대출을 같이 넣으세요"로 안내한다.
-  결혼예정자(예비배우자)는 합산 대상이 아니다 — 정부탭에서 `planned`로 답했으면 요약에 표시만 한다.
+  결혼예정자(예비배우자)는 합산 대상이 아니다 — 정부탭에서 `planned`로 답해도 은행 DSR 소득에 넣지 않는다.
+  코드: `PRODUCTS.bank.incomeBasis = "borrower"` → `ctx.borrowerIncome`. 서민·실수요의 9천만원 요건만 부부합산으로 본다.
 - **기존 부채 입력**은 종류별로 받는다(`data.DEBT_KINDS`). 월상환액·만기는 안 묻는다.
   종류를 늘리거나 줄이는 건 그 목록만 고친다. 방법 화면에서는 확정한 종류마다 얼마를 줄일지 따로 움직인다.
-- **기존 부채는 종류마다 1년 상환액으로 바꾼 뒤 더한다.** 파라미터는 `DEBT_KINDS[].dsr`, 계산은 `src/engine_bank_dsr.js`. `engine.limitParts`의 은행 경로만 그 함수를 부른다. 디딤돌 DTI는 여전히 합계 × 이자(`combinedDebtBalance`).
+- **기존 부채는 종류마다 1년 상환액으로 바꾼 뒤 더한다.** 파라미터는 `DEBT_KINDS[].dsr`, 계산은 `src/engine_bank_dsr.js`. `engine.limitParts`의 은행 경로만 그 함수를 부른다. 디딤돌 DTI는 주택담보를 뺀 합계 × 이자(`combinedDebtBalance(debt, true)`).
 - 월상환액·만기는 묻지 않는다.
 - **스트레스 금리는 실제 금리와 별개다.** 연간 이자상환액은 실제 대출금리에 신규 취급시점의 스트레스 금리를 더해 산정한다. 화면 금리에는 더하지 않는다. 본건 원리금균등도 그 합산 금리(4.0% + 3%p)로 환산한다. 금리로 이자를 만드는 기존 부채(신용·마이너스통장·전세·비주택 담보)도 같다. 실제 금리를 받기 전에는 `RULE.creditRate`(5.5%)로 자리를 채운다. 원금만 나누는 카드·자동차와, 실제 1년 원리금을 쓰는 주담대에는 이 가산을 붙이지 않는다.
 - 종류별 연 상환액 (`engine_bank_dsr.js`):
@@ -133,7 +137,7 @@ DSR(%) = ( 본건 연간 원리금 + 기존 부채 연간 원리금 ) / 연소�
 
 | 규정 | 코드 |
 |---|---|
-| 진입 조건(주택 보유 상태) | `src/products/bank.js` `requires: [["noHome","disposing"]]` · 플래그는 `engine.deriveFacts` |
+| 진입 조건(성년 · 주택 보유 상태) | `src/products/bank.js` `requires: ["adult"], [["noHome","disposing"]]` · 플래그는 `engine.deriveFacts` |
 | LTV 행 | `data.LTV_TABLE` · `data.REAL_DEMAND` · `engine.regulatoryLtv`. 한도는 `limitParts`가 그 비율을 받는다 |
 | 상한 없음 | `incomeCap`·`priceCap`·`loanCap` 값 `null` → `engine.judgeRule`이 검사에서 뺀다 |
 | Min(LTV, DSR, 지역별 cap) | `engine.limitParts` — `cap: null`이면 상품 cap 항이 빠지고 `regionCapped`면 지역 cap 항이 붙는다 |

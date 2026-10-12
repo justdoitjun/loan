@@ -155,10 +155,10 @@ function grab(section, re) {
 
 /* ── 5) incomeRules: 화면 목록 ≠ 원문 전체 ── */
 {
-  const off = INCOME_TYPES.filter((t) => t.지원여부 === false);
-  if (off.length !== 2) fail("소득추정 원문", "지원여부 false 가 2종이 아님: " + off.length);
+  const off = INCOME_TYPES.filter((t) => t.supported === false);
+  if (off.length !== 2) fail("소득추정 원문", "supported false 가 2종이 아님: " + off.length);
   else ok("소득추정 2종은 원문에 보존");
-  if (ACTIVE_INCOME_TYPES.some((t) => t.지원여부 === false)) fail("ACTIVE", "미지원이 섞임");
+  if (ACTIVE_INCOME_TYPES.some((t) => t.supported === false)) fail("ACTIVE", "미지원이 섞임");
   else if (ACTIVE_INCOME_TYPES.length !== INCOME_TYPES.length - off.length) fail("ACTIVE", "개수");
   else ok("ACTIVE_INCOME_TYPES 는 미지원 제외");
   const checkSrc = readFileSync(join(root, "src/IncomeCheck.jsx"), "utf8");

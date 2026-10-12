@@ -55,8 +55,14 @@
 
 어느 잣대를 쓰는지는 **상품 데이터**가 정한다(`PRODUCTS[key].capacityModel`). 화면·엔진에서 `if (productKey === ...)`로 분기하지 말 것.
 사용자에게 받는 부채는 **종류별 금액**(`data.DEBT_KINDS`)이고, 월상환액·만기는 묻지 않는다.
-은행 DSR은 종류별 파라미터(`DEBT_KINDS[].dsr`)를 `engine_bank_dsr.js`가 1년 상환액으로 바꾼다. 디딤돌 DTI는 아직 그 합계에 이자만 곱한다(`engine.combinedDebtBalance`).
+은행 DSR은 종류별 파라미터(`DEBT_KINDS[].dsr`)를 `engine_bank_dsr.js`가 1년 상환액으로 바꾼다. 디딤돌 DTI는 **주택담보를 뺀** 합계에 이자만 곱한다(`engine.combinedDebtBalance(debt, true)` — ②기타부채는 주담대 제외, `didimdol.md` 3절).
+
+**소득 기준도 상품 데이터가 정한다**(`PRODUCTS[key].incomeBasis`). 기본은 부부합산(정부탭, 예비배우자 포함).
+은행은 `"borrower"` = 차주단위: 배우자 소득은 은행탭에서 합산을 고른 경우만, 예비배우자는 넣지 않는다(`engine.borrowerSpouseIncomeOf`).
+서민·실수요의 소득 요건(9천만원)은 은행도 부부합산으로 본다.
 이자만 볼지 원리금으로 볼지는 상품 잣대가 한다(`products/limit.js`의 `DEBT_VIEW`). 보금자리(임시)는 이자만이라 종류별 DSR 표를 타지 않는다.
+
+**모든 상품의 공통 진입 = 민법상 성년(만 19세 이상)**(플래그 `adult`). 생년월일을 모르면(은행탭만 답함) 성년으로 본다 — 미성년으로 확인된 사람만 막는다.
 
 ## 상품별 Cap
 정부상품은 종별 대출한도(`products/gov/*.md`, 코드 `loanCap` 티어). 은행 일반 주담대는 **상품별 cap 없음**(`cap: null`) — 아래 지역별 cap이 대신 건다.

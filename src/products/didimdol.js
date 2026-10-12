@@ -7,6 +7,7 @@
      ["a", "b"]             → a AND b
      ["a", ["b", "c"]]      → a AND (b OR c)
    플래그는 engine.deriveFacts()가 만든다. 새 조건이 필요하면 거기에 추가.
+   5종 공통 진입 = 민법상 성년(adult) + 무주택(noHome). didimdol.md 0절.
 
    product = data.PRODUCTS의 키. 금리·LTV·방공제상쇄·실행시점 같은 '금융 파라미터'는
    거기서 가져온다. 여기 있는 건 '자격 상한'뿐 — 두 곳에 같은 숫자를 두지 않는다.
@@ -17,6 +18,7 @@ export const DIDIMDOL_RULES = [
   {
     key: "general", product: "didimdol", name: "일반가구", enabled: true,
     requires: [
+      { flags: ["adult"], label: "민법상 성년(만 19세 이상)" },
       { flags: ["noHome"], label: "무주택" },
       { flags: ["householdHead"], label: "세대주(기혼이거나 만30세 이상 단독세대주, 또는 미성년 형제자매·직계존속을 6개월 이상 부양하는 만30세 미만 단독세대주)" },
     ],
@@ -50,6 +52,7 @@ export const DIDIMDOL_RULES = [
   {
     key: "firstNewlywed", product: "didimdol", name: "생애최초 신혼가구", enabled: true,
     requires: [
+      { flags: ["adult"], label: "민법상 성년(만 19세 이상)" },
       { flags: ["noHome"], label: "무주택" },
       { flags: ["firstTime"], label: "생애최초" },
       { flags: [["newlywed", "planned"]], label: "혼인 7년 이내 또는 결혼예정 3개월 이내" },
@@ -63,6 +66,7 @@ export const DIDIMDOL_RULES = [
   {
     key: "newborn", product: "didimdol", name: "신생아 특례", enabled: true,
     requires: [
+      { flags: ["adult"], label: "민법상 성년(만 19세 이상)" },
       { flags: ["noHome"], label: "무주택" },
       { flags: ["hasNewborn"], label: "2년 이내 출생 + 2023.1.1 이후 출생아" },
     ],
@@ -79,6 +83,7 @@ export const DIDIMDOL_RULES = [
   {
     key: "youthDream", product: "didimdol", name: "청년 주택드림", enabled: true,
     requires: [
+      { flags: ["adult"], label: "민법상 성년(만 19세 이상)" },
       { flags: ["noHome"], label: "무주택" },
       { flags: ["householdHead"], label: "세대주(기혼이거나 만30세 이상 단독세대주, 또는 미성년 형제자매·직계존속을 6개월 이상 부양하는 만30세 미만 단독세대주)" },
       { flags: ["hasDreamAccount"], label: "주택드림 통장 청약당첨 + 통장 연계" },
@@ -99,6 +104,7 @@ export const DIDIMDOL_RULES = [
   {
     key: "jeonseVictim", product: "didimdol", name: "전세사기피해자 전용", enabled: false, // ✏️ MVP 제외. true로 바꾸면 판정에 포함된다.
     requires: [
+      { flags: ["adult"], label: "민법상 성년(만 19세 이상)" },
       { flags: ["noHome"], label: "무주택" },
       { flags: ["jeonseVictim"], label: "전세사기피해자 확인" },
     ],
