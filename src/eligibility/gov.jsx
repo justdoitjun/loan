@@ -177,9 +177,9 @@ function FamilyCard({ elig, set, setHasSpouse, facts, ready }) {
   return (
     <div style={{ ...card, marginBottom: 16 }}>
       <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 3 }}>한 집에 같이 살 가족정보를 넣어주세요</div>
-      <div style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.55, marginBottom: 14 }}>
+      {/* <div style={{ fontSize: 12, color: C.inkSoft, lineHeight: 1.55, marginBottom: 14 }}>
         생년월일만 있으면 나이·자녀 수·신생아 여부까지 저희가 알아서 봐요. 따로 또 묻지 않을게요.
-      </div>
+      </div> */}
 
       <FieldRow label="본인 생년월일" hint={myAge !== null ? `만 ${myAge}세` : null}>
         <BirthdateInput value={elig.ownBirthday} onChange={(v) => set("ownBirthday", v)} />
