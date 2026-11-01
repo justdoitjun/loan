@@ -17,8 +17,11 @@ export function statusOf(r, cash) {
 }
 
 /* 단지 하나당 한 행. 대표 평형 = 현금 안에 드는 평형 중 가장 넓은 것, 없으면 가장 덜 모자란 것.
-   행의 구간·부족분은 대표 평형 기준. 정렬은 대표 평형의 필요 현금 오름차순, 같으면 시세 낮은 순.
+   행의 구간·부족분은 대표 평형 기준.
+   정렬은 블록(초록 → 노랑 → 회색) 순을 지키고, 블록 안에서는 대표 평형의 시세 높은 순, 같으면 필요 현금 적은 순.
+   그래서 맨 위 초록 행 = 지금 닿는 가장 비싼 단지("1등", ux.md 「홈 리빌 모션」 C).
    key는 구|동|단지명 — 동이 바뀌어도 같은 이름이 섞이지 않게. */
+const BLOCK = { in: 0, edge: 1, out: 2 };
 export function groupComplexes(results, cash) {
   const by = new Map();
   for (const r of results) {
@@ -36,7 +39,7 @@ export function groupComplexes(results, cash) {
     g.count = g.units.length;
     groups.push(g);
   }
-  groups.sort((a, b) => a.rep.cashNeeded - b.rep.cashNeeded || a.rep.price - b.rep.price || (a.name < b.name ? -1 : 1));
+  groups.sort((a, b) => BLOCK[a.status] - BLOCK[b.status] || b.rep.price - a.rep.price || a.rep.cashNeeded - b.rep.cashNeeded || (a.name < b.name ? -1 : 1));
   return groups;
 }
 

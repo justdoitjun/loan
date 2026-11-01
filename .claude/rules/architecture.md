@@ -28,8 +28,8 @@
 | 파일 | 역할 |
 |---|---|
 | `src/App.jsx` | 지역(시·구·동)+소득+현금+단지 목록(`Home.jsx`) → 소득 확인(Yes/No) → 정부/은행 팝업. 매물별 대출(`evaluate`/`judgeUnits`)은 여기서 계산해 홈에 넘긴다. 뒤로 가면 방법 화면 가정(부채·레버)을 비운다. **단계 오케스트레이션 + 사람상태 소유** |
-| `src/Home.jsx` | **홈 화면(예산 리빌).** 카운터 · 연소득/현금 슬라이더 · 단지 목록(아코디언) · 예산선 · 회색 접기 · 첫 리빌/실시간 모션. 계산은 하지 않는다 — App이 넘긴 결과를 `reveal.js`로 접어서 그린다 |
-| `src/reveal.js` | **단지 접기·구간·정렬 순수 함수**(`statusOf`·`groupComplexes`·`splitByBudget`). 한도를 다시 계산하지 않고 `cashNeeded`와 현금만 비교한다. JSX 금지 |
+| `src/Home.jsx` | **홈 화면(예산 리빌).** 카운터 · 연소득/현금 슬라이더 · 단지 목록(아코디언) · 예산선 · 회색 접기 · 첫 리빌/실시간 모션 · 행 자리 이동(FLIP) · 맨 위 "1등" 배지와 당첨 연출. 계산은 하지 않는다 — App이 넘긴 결과를 `reveal.js`로 접어서 그린다 |
+| `src/reveal.js` | **단지 접기·구간·정렬 순수 함수**(`statusOf`·`groupComplexes`·`splitByBudget`). 정렬은 시세 높은 순(블록은 초록→노랑→회색). 한도를 다시 계산하지 않고 `cashNeeded`와 현금만 비교한다. JSX 금지 |
 | `src/person.js` | **사람상태 스키마 + 순수 판단**(EMPTY_PERSON·eligSteps·detailReady·leverOf). JSX 금지 |
 | `src/verdict.js` | **`judgeUnit(매물, 사람)` — 매물별 한도·필요 현금 순수 함수.** 목록 숫자 갱신의 단일 진입점. 답을 끝낸 탭의 상품만 본다(`person.answeredRules`). 방공제는 늘 상품 기본값. **`strategyView(매물, 사람, pickedKey)` — 방법 화면 계산 전부**(자격은 `judgeUnit`과 같은 판정, 소득 가정 상한, 손잡이 여부, 다음 길) |
 | `src/Eligibility.jsx` | **자격 화면 = 스텝 컨트롤러.** 자격을 묻는 유일한 입구. 탭 없음. 상단 실시간 요약(열린 대출 N개·최대 X억·남은 질문 수) · 현재 스텝 카드 하나 · 뒤로/다음 · 결과(전 상품 카드). 어느 스텝을 보는지(`cursor`)만 로컬 상태 |

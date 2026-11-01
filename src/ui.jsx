@@ -126,6 +126,19 @@ export const css = `
   @keyframes rvIn{from{background-color:#fff;border-color:${C.line};transform:scale(1);}55%{transform:scale(1.02);}to{transform:scale(1);}}
   .rv-flash{animation:rvFlash var(--rv-flash) ease;}
   @keyframes rvFlash{0%{background-color:#fff;}35%{background-color:${C.green};}100%{background-color:var(--rv-bg);}}
+  /* 1등 당첨 — ux.md 「홈 리빌 모션」 C. 행은 FLIP로 미끄러지고(translate, 인라인), 부풀기는 안쪽 .rv-main이 맡아 둘이 겹치지 않는다.
+     전부 line 뒤에 시작한다(자리에 앉은 뒤 축하). 색종이는 납작한 사각형, 그라데이션·그림자 없음 */
+  .rv-row{position:relative;}
+  .rv-rank{position:absolute;top:-9px;left:12px;z-index:1;padding:2px 8px;border-radius:999px;background:${C.green};color:${C.ink};font-size:11px;font-weight:900;line-height:1.4;letter-spacing:-.01em;}
+  .rv-win{animation:rvWinBg var(--rv-win) ease;animation-delay:var(--rv-line);}
+  @keyframes rvWinBg{0%{background-color:var(--rv-bg);}20%{background-color:${C.green};}100%{background-color:var(--rv-bg);}}
+  .rv-win .rv-main{animation:rvWin var(--rv-win) cubic-bezier(.2,.9,.3,1.2);animation-delay:var(--rv-line);}
+  @keyframes rvWin{0%{transform:scale(1);}30%{transform:scale(1.05);}60%{transform:scale(.99);}100%{transform:scale(1);}}
+  .rv-win .rv-rank{animation:rvPop var(--rv-win) cubic-bezier(.2,.9,.3,1.3) both;animation-delay:var(--rv-line);}
+  @keyframes rvPop{0%{transform:scale(0) rotate(-12deg);}45%{transform:scale(1.35) rotate(6deg);}100%{transform:scale(1) rotate(0);}}
+  .rv-burst{position:absolute;top:0;left:30px;width:0;height:0;pointer-events:none;z-index:2;}
+  .rv-burst i{position:absolute;left:-3px;top:-3px;width:6px;height:6px;border-radius:1px;background:var(--c);opacity:0;animation:rvBurst var(--rv-win) cubic-bezier(.1,.8,.3,1) both;animation-delay:var(--rv-line);}
+  @keyframes rvBurst{0%{opacity:1;transform:rotate(var(--a)) translateX(0) rotate(0);}70%{opacity:1;}100%{opacity:0;transform:rotate(var(--a)) translateX(var(--d)) rotate(260deg);}}
   .rv-main,.rv-unit,.rv-fold{font-family:inherit;-webkit-tap-highlight-color:transparent;box-sizing:border-box;}
   .rv-main{width:100%;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;text-align:left;padding:13px 15px;border:none;border-radius:14px;background:transparent;color:${C.ink};cursor:pointer;}
   .rv-name{font-size:15px;font-weight:800;color:var(--rv-name);line-height:1.3;}
@@ -153,7 +166,8 @@ export const css = `
   @media (hover:hover){ .rv-fold:hover{background:${C.softer};} .rv-unit:hover{background:rgba(0,0,0,.025);} }
 
   @media (prefers-reduced-motion: reduce){
-    .dot,.slideup,.modal,.sheet-pane,.rv-first,.rv-flash{animation:none;}
+    .dot,.slideup,.modal,.sheet-pane,.rv-first,.rv-flash,.rv-win,.rv-win .rv-main,.rv-win .rv-rank,.rv-burst i{animation:none;}
+    .rv-burst{display:none;}
     .dot,.acc,.rv-row,.rv-line{transition:none;}
   }
 `;
