@@ -131,7 +131,7 @@ export default function Home({ header, dong, income, setIncome, incomeMax, cash,
           대출은 부채 반영 전 최대예요. 기존 대출이 있으면 줄어들어요. 금액은 모두 ‘약’이에요.
         </div>
       </div>
-      <iframe src="https://https://kbland.kr/map?xy=37.5597498,126.9717549,17" width="140" height="140" title="Example Page"></iframe>
+      {/* <iframe src="https://https://kbland.kr/map?xy=37.5597498,126.9717549,17" width="140" height="140" title="Example Page"></iframe> */}
 
       {/* 3) 단지 목록 — 리빌의 무대 */}
       <div className="rv-list">
