@@ -5,7 +5,7 @@ import { REGION, RULE, PRODUCTS, REAL_DEMAND, LTV_TABLE } from "../src/data.js";
 import { regulatoryLtv, realDemandHeadGap, limitParts, evaluate, buildCtx, deriveFacts, judgeAll } from "../src/engine.js";
 import { BANK_RULES } from "../src/products/index.js";
 import { limitAt, ceilingAt } from "../src/products/limit.js";
-import { EMPTY_PERSON, bankSteps, leverOf } from "../src/person.js";
+import { EMPTY_PERSON, flowOf, leverOf } from "../src/person.js";
 
 const fail = (name, detail) => {
   console.error(`FAIL ${name}: ${detail}`);
@@ -89,12 +89,17 @@ if (!(atCap.limit > atMax.limit)) fail("60% tier should beat 40% tier at this pr
 const listed = evaluate({ price: 100000 }, 999999);
 eq("budget screen uses general ltv minus room", listed.loan, 100000 * 0.4 - RULE.roomDeduction);
 
-const none = { ...EMPTY_PERSON.elig, homeCount: 0, bankIncomeJoint: false, firstTime: null };
-eq("bank waits for first time", bankSteps(none).ready, false);
-eq("bank ready after first time no", bankSteps({ ...none, firstTime: false }).ready, true);
-eq("dispose does not ask first time", bankSteps({
-  ...EMPTY_PERSON.elig, homeCount: 1, disposeExisting: true, bankIncomeJoint: false, firstTime: null,
-}).ready, true);
+/* 자격 흐름(person.flowOf) — 탭 없음. 가족정보가 먼저다. */
+const fam = { ...EMPTY_PERSON.elig, ownBirthday: "1980-01-01", hasSpouse: false, birthdays: [] };
+eq("later steps wait for family", flowOf({ ...EMPTY_PERSON.elig, homeCount: 0 }).steps.length, 2);
+eq("flow waits for first time", flowOf({ ...fam, homeCount: 0 }).ready, false);
+eq("flow waits for marital", flowOf({ ...fam, homeCount: 0, firstTime: false }).ready, false);
+eq("flow ready: no home, single, over 39", flowOf({ ...fam, homeCount: 0, firstTime: false, marital: "single" }).ready, true);
+eq("under 39 asks dream", flowOf({ ...fam, ownBirthday: "1995-01-01", homeCount: 0, firstTime: false, marital: "single" }).ready, false);
+eq("dispose skips first time and marital", flowOf({ ...fam, homeCount: 1, disposeExisting: true }).ready, true);
+eq("dispose with spouse asks income", flowOf({ ...fam, hasSpouse: true, homeCount: 1, disposeExisting: true }).ready, false);
+eq("keep is closed, not ready", flowOf({ ...fam, homeCount: 1, disposeExisting: false }).closed, true);
+eq("keep is not ready", flowOf({ ...fam, homeCount: 1, disposeExisting: false }).ready, false);
 
 const person = {
   ...EMPTY_PERSON,

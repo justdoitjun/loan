@@ -12,21 +12,21 @@
 |---|---|---|
 | [findings.md](findings.md) | **찾은 결함과 사람이 정할 것.** 먼저 읽는다 | 전체 |
 | [01-first-screen.md](01-first-screen.md) | 지역 선택 · 연소득 슬라이더 · 매물 목록 · 소득 확인 · 정부/은행 팝업 · 대략→정밀 전환 | `ux.md` 1~2단계, `_policy.md` |
-| [02-gov-eligibility.md](02-gov-eligibility.md) | 정부 탭 질문 순서·건너뛰기·잠금·접기·결과 카드 | `ux.md` 3단계, `gov_common.md` |
+| [02-gov-eligibility.md](02-gov-eligibility.md) | 자격 화면 스텝 순서·건너뛰기·잠금·실시간 요약·결과 카드(전 상품) | `ux.md` 3단계, `gov_common.md` |
 | [03-didimdol.md](03-didimdol.md) | 디딤돌 5종 자격·상한 티어·경계값·LTV/DTI/cap | `didimdol.md`, `_policy.md` |
 | [04-bogeumjari.md](04-bogeumjari.md) | 보금자리(스텁) 현재 동작 고정 | `bogeumjari.md` ⚠️ |
 | [bank-mortgage.md](bank-mortgage.md) | 은행 일반 주담대 — 지역 cap·LTV 행·스트레스 DSR (기존 문서) | `bank.md` |
 | [bank-mortgage-result.md](bank-mortgage-result.md) | 위 문서의 2026-10-12 실행 결과 (기존) | — |
-| [05-bank-extra.md](05-bank-extra.md) | 은행 문서가 다루지 않은 것 — 질문 상태, 탭 공유, 부채 7종, 예비배우자, 서민 60% 경계 | `bank.md` |
+| [05-bank-extra.md](05-bank-extra.md) | 은행 문서가 다루지 않은 것 — 부채 7종, 예비배우자, 서민 60% 경계 | `bank.md` |
 | [06-strategy.md](06-strategy.md) | 방법 화면 — 부채 입력, 필요 현금, 상세이유, 손잡이, 방공제, 다른 매물 | `ux.md` 방법 화면 |
-| [07-state-and-navigation.md](07-state-and-navigation.md) | 사람상태 보존·초기화, 탭 공유, 뒤로 가기, 목록 재계산 | `architecture.md` 사람상태 |
+| [07-state-and-navigation.md](07-state-and-navigation.md) | 사람상태 보존·초기화, 뒤로 가기, 목록 재계산 | `architecture.md` 사람상태 |
 | [08-income-check.md](08-income-check.md) | 소득 자가진단 판정 로직 (입구 없음, F-11) | `didimdol.md` 4절, `incomeRules.js` |
 | [09-data.md](09-data.md) | 시세 파일·법정동 코드·배치 집계/export·회귀 스크립트 | `architecture.md` 시세 파이프라인 |
 | [10-layout.md](10-layout.md) | 반응형·한 줄 맞춤·오버레이 접근성 | `CLAUDE.md` 화면 디자인, `ux.md` 반응형 |
 
 ## 케이스 읽는 법
 
-- ID 앞자리가 문서다. `FS` 첫 화면, `GV` 정부 탭 흐름, `DG` 디딤돌, `BJ` 보금자리, `BK` 은행 추가, `ST` 방법 화면, `X` 상태·이동, `IC` 소득 자가진단, `DA` 데이터, `LY` 레이아웃.
+- ID 앞자리가 문서다. `FS` 첫 화면, `GV` 자격 스텝 흐름, `DG` 디딤돌, `BJ` 보금자리, `BK` 은행 추가, `ST` 방법 화면, `X` 상태·이동, `IC` 소득 자가진단, `DA` 데이터, `LY` 레이아웃.
 - 우선순위: **P1** 숫자나 자격이 틀리면 사용자가 잘못 판단한다 / **P2** 흐름·안내가 틀린다 / **P3** 표시·문구.
 - 종류: **화면** = 브라우저에서 누른다 / **로직** = 함수만 돌린다(`node`로 `src/*.js` import). 둘 다 쓴 케이스는 로직으로 먼저 거르고 화면으로 확인한다.
 - `→ F-xx`가 붙은 케이스는 **지금 코드로는 실패하는 게 정상**이다. 기대 칸은 규칙 기준이고, "현재" 칸에 지금 코드가 내는 값을 적었다.

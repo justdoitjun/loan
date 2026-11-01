@@ -12,14 +12,14 @@
 
    화면에 조종간·엔진·레버를 쓰지 않는다.
    계산은 직접 하지 않는다. verdict.strategyView가 자격·한도·천장·손잡이 여부를 전부 만들고, 여기선 그리기만 한다.
-   ⚠️ 자격은 여기서 절대 다시 묻지 않는다. 자격은 Eligibility 화면에서만 받는다
-      (정부 → eligibility/gov.jsx, 은행 → eligibility/bank.jsx). */
+   ⚠️ 자격은 여기서 절대 다시 묻지 않는다. 자격은 Eligibility 화면(한 흐름, 탭 없음)에서만 받는다. */
 import { useId, useMemo, useRef, useState } from "react";
 import { PRODUCTS, LEVER, DEBT_KINDS, RULE, C } from "./data.js";
 import { won, eok, monthlyInstallment } from "./engine.js";
 import { judgeUnits, strategyView } from "./verdict.js";
 import { BackButton, Section, Stat, useTween, eyebrow, h1, card, fine, rangeFill, useOverlayLock } from "./ui.jsx";
 import DetailInfo from "./DetailInfo.jsx";
+import { StickyCta, NextActionsSheet } from "./NextActions.jsx";
 
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
@@ -30,6 +30,7 @@ const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 export default function Strategy({ ctx, person, pickedKey, detail, setDetail, pull, setPull, onSwapUnit, onPickProduct, units, onBack }) {
   const view = strategyView(ctx.unit, person, pickedKey);
   const { picked, pickedMissing, ready } = view;
+  const [actionsOpen, setActionsOpen] = useState(false);   // 「다음 액션」 바텀시트(훅이라 이른 return 앞에 둔다)
 
   /* 자격이 통과한 게 하나도 없으면 여기 올 일이 없다. 방어만. */
   if (!picked) {
@@ -46,7 +47,9 @@ export default function Strategy({ ctx, person, pickedKey, detail, setDetail, pu
   const pullLever = (k, v) => setPull((p) => ({ ...(p ?? {}), [k]: v }));
   const pullDebt = (key, v) => setPull((p) => ({ ...(p ?? {}), debts: { ...(p?.debts ?? {}), [key]: v } }));
 
+  /* 고정 바는 .slideup 밖에 둔다 — 들어오는 애니메이션(transform) 동안 fixed가 그 안에 갇혀 화면 밖에 그려진다 */
   return (
+    <>
     <div className="slideup">
       <BackButton onClick={onBack}>가능한 대출 목록으로</BackButton>
       <div style={eyebrow}>{picked.title}</div>
@@ -69,7 +72,16 @@ export default function Strategy({ ctx, person, pickedKey, detail, setDetail, pu
       <OtherUnits person={person} units={units} currentId={ctx.unit.id} onSwapUnit={onSwapUnit} />
 
       <p style={fine}>대략적인 전략을 짜면, 전문가가 확인해드려요.</p>
+      {/* 고정 바 자리만큼 아래를 비운다 — 마지막 내용이 바에 가리지 않게. 바는 전략이 선 뒤에만 있다 */}
+      {ready && <div aria-hidden="true" style={{ height: 72 }} />}
     </div>
+    {/* 「다음 액션」 — 부채를 확정해 전략이 선 뒤에만 바가 뜬다. 누르면 바텀시트(ux.md 「다음 액션」) */}
+    {ready && !actionsOpen && <StickyCta onClick={() => setActionsOpen(true)} />}
+    {ready && actionsOpen && (
+      <NextActionsSheet unit={ctx.unit} productKey={picked.product} productTitle={picked.title}
+        loan={view.reach.limit} cash={view.cash} onClose={() => setActionsOpen(false)} />
+    )}
+    </>
   );
 }
 

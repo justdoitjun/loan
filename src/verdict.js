@@ -30,7 +30,7 @@ export function judgeUnit(unit, person) {
   const lever = leverOf(person, unit.price);
   const ctx = buildCtx({ unit, ownIncome: person.ownIncome, elig: person.elig });
   const facts = deriveFacts(withAssumedIncome(ctx, lever.income));
-  /* 답을 끝낸 탭의 상품만 본다(person.answeredRules). */
+  /* 자격 스텝을 다 답했으면 전 상품, 아니면 빈 배열(person.answeredRules). */
   const { passed, others } = judgeAll(facts, answeredRules(person.elig));
 
   /* 통과한 상품마다 지금 레버 위치에서의 구체 한도. 잣대(DTI/DSR)와 소득 기준은 상품 데이터가 고른다.

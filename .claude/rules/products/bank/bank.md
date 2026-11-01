@@ -39,13 +39,12 @@
 - 소득 가정으로 부부합산이 9천만원을 넘으면 서민 행이 닫힌다. 천장 계산은 9천만원 지점과 소득 최댓값을 둘 다 보고 한도가 더 큰 쪽을 쓴다.
 - 지방 · 규제지역 외 수도권 열은 표에만 있다. `REGION`이 바뀌면 `regulatoryLtv`가 그 열을 읽는다.
 
-**질문** — ① 주택 보유 상태 ② 무주택이면 생애최초 ③ 배우자 소득(DSR 합산용).
-생애최초는 LTV를 40%에서 70%로 올리므로 은행 경로에서 묻는다. 정부탭에서 이미 답했으면 다시 묻지 않는다.
-세대주·결혼·청년통장은 은행탭에서 묻지 않는다.
-답은 정부탭과 같은 `elig` 한 벌에 들어간다(`homeCount` · `disposeExisting` · `firstTime` · `bankIncomeJoint` · `spouseBand`).
-③은 `bankIncomeJoint`(합산 / 본인 소득만)이다. 가족정보의 배우자 유무(`hasSpouse`)와 다른 질문이라 서로를 지우지 않는다.
-은행탭에서 안 골랐으면 정부탭을 끝까지 답했을 때만 그 답을 빌린다(배우자 있음 = 합산, `person.bankJointOf`).
-진입 조건에는 **민법상 성년**도 있다(`adult`). 은행탭은 생년월일을 묻지 않으므로, 정부탭에서 미성년으로 확인된 경우만 닫힌다.
+**질문** — 자격 화면은 한 흐름이다(`ux.md` 3단계). 은행이 읽는 답은 ① 주택 보유 상태(4버킷) ② 무주택이면 생애최초 ③ 가족정보의 배우자 유무(DSR 합산).
+생애최초는 LTV를 40%에서 70%로 올린다. 세대주·결혼·청년통장은 은행이 읽지 않는다(같은 흐름에서 묻더라도).
+답은 `elig` 한 벌에 들어간다(`homeCount` · `disposeExisting` · `firstTime` · `hasSpouse` · `spouseBand`).
+**배우자 소득 합산은 따로 묻지 않는다.** 가족정보의 배우자 있음 = 합산(`person.bankJointOf` → 엔진 `borrowerSpouseIncomeOf`).
+`bankIncomeJoint` 필드는 스키마에 남아 있지만 화면이 채우지 않는다(채우면 그 값이 우선). 본인 소득만으로 보는 건 방법 화면의 소득 가정이다.
+진입 조건에는 **민법상 성년**도 있다(`adult`). 가족정보(생년월일)를 먼저 받으므로 늘 확인된다.
 
 ---
 
@@ -77,7 +76,7 @@ DSR(%) = ( 본건 연간 원리금 + 기존 부채 연간 원리금 ) / 연소�
 
 - **소득**: 차주단위가 원칙. 배우자 소득을 합산하면 **배우자 부채도 합산**된다 →
   화면은 "배우자 소득을 넣었으면 부채 슬라이더에도 배우자 대출을 같이 넣으세요"로 안내한다.
-  결혼예정자(예비배우자)는 합산 대상이 아니다 — 정부탭에서 `planned`로 답해도 은행 DSR 소득에 넣지 않는다.
+  결혼예정자(예비배우자)는 합산 대상이 아니다 — 혼인상태를 `planned`로 답해도 은행 DSR 소득에 넣지 않는다.
   코드: `PRODUCTS.bank.incomeBasis = "borrower"` → `ctx.borrowerIncome`. 서민·실수요의 9천만원 요건만 부부합산으로 본다.
 - **기존 부채 입력**은 종류별로 받는다(`data.DEBT_KINDS`). 월상환액·만기는 안 묻는다.
   종류를 늘리거나 줄이는 건 그 목록만 고친다. 방법 화면에서는 확정한 종류마다 얼마를 줄일지 따로 움직인다.
@@ -142,5 +141,5 @@ DSR(%) = ( 본건 연간 원리금 + 기존 부채 연간 원리금 ) / 연소�
 | 상한 없음 | `incomeCap`·`priceCap`·`loanCap` 값 `null` → `engine.judgeRule`이 검사에서 뺀다 |
 | Min(LTV, DSR, 지역별 cap) | `engine.limitParts` — `cap: null`이면 상품 cap 항이 빠지고 `regionCapped`면 지역 cap 항이 붙는다 |
 | 기존 부채 연 상환액 | `src/engine_bank_dsr.js` `bankExistingAnnual`. 은행 경로에서만 호출 |
-| 화면 | `src/eligibility/bank.jsx` — 주택 보유 → 무주택이면 생애최초 → 배우자 소득 → 카드(한도 / LTV 행 / 금리 / 실행시점) |
-| 진행 상태 | `person.bankSteps` — 지도 정밀 모드는 정부 **또는** 은행 답변이 차면 켜진다(`personReady`) |
+| 화면 | `src/Eligibility.jsx`(스텝) + `eligibility/questions.jsx`(주택 보유 4버킷 · 생애최초) + `eligibility/results.jsx`(카드: 한도 / LTV 행 / 금리 / 실행시점 / 무엇이 벽인가) |
+| 진행 상태 | `person.flowOf` — 정밀 모드는 한 흐름을 끝까지 답하면 켜진다(`personReady`). 유지·다주택으로 닫히면 켜지지 않는다 |

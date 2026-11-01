@@ -87,12 +87,12 @@ export const PRODUCTS = {
        (engine.didimdolDtiLimit). 그래서 이 상품엔 ratio(DSR비율)가 없다 — DTI상한은 DIDIMDOL_DTI.cap.
        ⚠️ calcRate도 없다. 디딤돌 원리금 계산 금리는 아래 DIDIMDOL_LOAN_RATE 한 곳에만 둔다
           (기타부채 추정금리 ESTIMATED_DEBT_RATE와 구분하기 위해서다). 여기 되살리지 말 것. */
-    key: "didimdol", name: "디딤돌대출", rateLabel: "연 2~3%대", capacityModel: "fundDTI",
+    key: "didimdol", name: "디딤돌대출", channel: "gov", rateLabel: "연 2~3%대", capacityModel: "fundDTI",
     /* 상품 고유 LTV. 규제지역 은행 표(LTV_TABLE)와 별개 — didimdol.md. MVP는 70%만. */
     LTV: 0.70, offsetsRoomDeduction: false, cap: 20000, leadTime: "약 2개월",
   },
   bogeumjari: {
-    key: "bogeumjari", name: "보금자리론", rateLabel: "연 3~4%대",
+    key: "bogeumjari", name: "보금자리론", channel: "gov", rateLabel: "연 3~4%대",
     /* ⚠️ 스텁. 규제지역 은행 표를 타지 않는다(bogeumjari.md). */
     calcRate: 0.038, ratio: 0.60, LTV: 0.70, offsetsRoomDeduction: true, cap: 36000, leadTime: "약 1.5~2개월",
   },
@@ -106,7 +106,7 @@ export const PRODUCTS = {
        incomeBasis: "borrower" = 차주단위 소득. 배우자 소득은 은행탭에서 '합산'을 고른 경우만 더한다.
          예비배우자는 넣지 않는다(bank.md 3절). 없으면 "household" = 정부탭의 부부합산(예비배우자 포함). */
   bank: {
-    key: "bank", name: "일반 주택담보대출", rateLabel: "연 4%대",
+    key: "bank", name: "일반 주택담보대출", channel: "bank", rateLabel: "연 4%대",
     calcRate: RULE.loanRate, stressRate: 0.03, ratio: RULE.DSR, years: RULE.loanYears,
     /* LTV 폴백 = 일반차주. 실제 비율은 ltvFromTable → engine.regulatoryLtv (bank.md 1절). */
     LTV: LTV_TABLE[REGION].noHome, ltvFromTable: true, offsetsRoomDeduction: true, cap: null, regionCapped: true, leadTime: "약 2~4주",
@@ -189,5 +189,45 @@ export const C = {
   soft: "#FFF4C2", softer: "#FBF8F1", press: "#E6B400", track: "#EFEBE3",
   amber: "#E08A1E", greyDot: "#C9C3B8",
 };
+/* ── 홈 화면(예산 리빌) 상수 — 출처 .claude/rules/ux.md 「화면 흐름」 1단계 · 「홈 리빌 모션」.
+   초기값·구간 기준·모션 타이밍을 여기 한 곳에서 조정한다. 단지 접기 로직은 src/reveal.js.
+   defaultIncome/defaultCash(만원) = 기본 동(중계동)에서 자격 전 산식으로 초록이 3~4곳 보이는 선.
+   edgeRatio = 부족분이 시세의 이 비율 이하면 노랑(경계). motion(ms) = 첫 리빌·실시간 조작의 타이밍. */
+export const REVEAL = {
+  defaultIncome: 5000, defaultCash: 29500,
+  cashMax: 100000, cashStep: 500,
+  edgeRatio: 0.10,
+  motion: {
+    stagger: 70,    // 첫 리빌: 행마다 늦게 켜지는 간격
+    rowIn: 420,     // 첫 리빌: 한 행이 켜지는 길이(색 + 스케일 1→1.02→1)
+    color: 200,     // 이후: 구간 색 전환
+    line: 250,      // 이후: 예산선 이동(ease-out)
+    flash: 600,     // 이후: 새로 초록이 된 행의 반짝임
+    counter: 280,   // 카운터 카운트업
+    idleAuto: 1000, // 진입 후 이만큼 아무것도 안 만지면 첫 리빌 자동 시작
+  },
+};
+
+/* ── 방법 화면 「다음 액션」 설정 — 출처 .claude/rules/ux.md 「다음 액션」.
+   storageKey   관심 클릭·저장한 전략이 쌓이는 localStorage 키(src/nextAction.js가 읽고 쓴다). 서버가 생기면 그 파일만 바꾼다.
+   starBankingUrl  "스타뱅킹에서 영업점 예약하기"가 여는 주소. null이면 클릭을 기록만 하고 안내를 띄운다. ✏️ 실제 예약 주소로 교체.
+   branchDocs   영업점 갈 때 챙길 서류. ✏️ TODO — 비어 있으면 화면에 TODO 자리표시가 보인다. 채우면 그대로 목록이 된다.
+   actions      네 카드의 문구. 순서가 화면 순서다. kind는 기록에 남는 키라 바꾸면 이전 기록과 끊긴다. */
+export const NEXT_ACTIONS = {
+  storageKey: "naejip.nextAction.v1",
+  starBankingUrl: null, // ✏️ TODO 실제 KB스타뱅킹 영업점 예약 주소
+  branchDocs: [],       // ✏️ TODO 준비 서류 목록 (문자열 배열). 예: "신분증", "소득금액증명원(최근 2년)"
+  actions: [
+    { kind: "save",    title: "저장하고 알림 받기",            desc: "조건이 바뀌면 알려드릴게요. 금리·정책이 달라지면 이 집의 숫자도 달라져요.", cta: "이 전략 저장하기", done: "저장했어요 · 알림 준비 중" },
+    { kind: "branch",  title: "준비 서류 챙겨서 인근 영업점 예약하기", desc: "뭘 들고 가야 하는지 아는 상태로 예약하는 게 이 단계의 가치예요.", cta: "준비 서류 보기", open: "스타뱅킹에서 영업점 예약하기" },
+    { kind: "realtor", title: "부동산 상담 예약",              desc: "이 매물을 가진 부동산에 상담 시간을 잡아드려요.", cta: "상담 시간 잡기" },
+    { kind: "expert",  title: "대출 전문가 상담",              desc: "상담받고 확정하기. 숫자가 맞는지 사람이 한 번 더 봐요.", cta: "상담 신청하기" },
+  ],
+  stickyLabel: "이대로 알아보기",
+  soonTitle: "준비 중이에요",
+  soonBody: "이 기능은 아직 열리지 않았어요. 눌러 주신 건 기억해 둘게요 — 열리면 여기서 바로 이어져요.",
+};
+
 export const DONG_LABELS = [{ name: "상계동", x: 28, y: 15 }, { name: "중계동", x: 66, y: 40 }, { name: "하계동", x: 60, y: 66 }];
-export const TABS = [{ key: "gov", label: "정부" }, { key: "bank", label: "은행" }];
+/* 상품 꼬리표. 자격 화면 카드에 붙는 라벨일 뿐 갈림길이 아니다(ux.md 3단계). 키는 PRODUCTS[key].channel. */
+export const CHANNEL_LABEL = { gov: "정부", bank: "은행" };

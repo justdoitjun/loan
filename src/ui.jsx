@@ -111,9 +111,50 @@ export const css = `
   :where(.app-root, .app-root *){min-width:0;}
   [data-fit-relax]{min-width:0 !important;flex-shrink:1 !important;}
 
+  /* ── 홈 리빌(.rv-*) — ux.md 「홈 리빌 모션」. 타이밍은 Home이 CSS 변수(--rv-*)로 data.REVEAL.motion에서 넣는다.
+     초록 = 브랜드 면(soft)+테두리(greenDeep), 노랑(경계) = amber 테두리, 회색 = 기본 선. 그라데이션·그림자 없음. */
+  .rv-hero{display:flex;align-items:baseline;gap:6px;margin-top:14px;flex-wrap:wrap;}
+  .rv-counter{font-size:48px;line-height:1;font-weight:800;color:${C.greenDeep};font-variant-numeric:tabular-nums;letter-spacing:-.03em;}
+  .rv-hero-txt{font-size:18px;font-weight:800;color:${C.ink};line-height:1.3;}
+  .rv-hero-sub{font-size:13px;color:${C.inkSoft};margin-top:6px;font-weight:600;}
+  .rv-list{position:relative;margin-top:6px;}
+  .rv-row{--rv-bg:#fff;--rv-bd:${C.line};--rv-name:${C.ink};background-color:var(--rv-bg);border:1.5px solid var(--rv-bd);border-radius:14px;margin-bottom:8px;transition:background-color var(--rv-color) ease,border-color var(--rv-color) ease;}
+  .rv-row[data-status="in"]{--rv-bg:${C.soft};--rv-bd:${C.greenDeep};}
+  .rv-row[data-status="edge"]{--rv-bd:${C.amber};}
+  .rv-row[data-status="out"]{--rv-name:${C.inkSoft};}
+  .rv-first{animation:rvIn var(--rv-in) ease both;animation-delay:calc(var(--i) * var(--rv-stagger));}
+  @keyframes rvIn{from{background-color:#fff;border-color:${C.line};transform:scale(1);}55%{transform:scale(1.02);}to{transform:scale(1);}}
+  .rv-flash{animation:rvFlash var(--rv-flash) ease;}
+  @keyframes rvFlash{0%{background-color:#fff;}35%{background-color:${C.green};}100%{background-color:var(--rv-bg);}}
+  .rv-main,.rv-unit,.rv-fold{font-family:inherit;-webkit-tap-highlight-color:transparent;box-sizing:border-box;}
+  .rv-main{width:100%;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;text-align:left;padding:13px 15px;border:none;border-radius:14px;background:transparent;color:${C.ink};cursor:pointer;}
+  .rv-name{font-size:15px;font-weight:800;color:var(--rv-name);line-height:1.3;}
+  .rv-sub{font-size:12px;color:${C.inkSoft};margin-top:3px;}
+  .rv-sub b{font-weight:800;color:var(--rv-name);}
+  .rv-nums{font-size:12px;color:${C.inkSoft};margin-top:4px;font-variant-numeric:tabular-nums;}
+  .rv-right{flex:0 0 auto;text-align:right;}
+  .rv-price{font-size:15px;font-weight:800;color:var(--rv-name);white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .rv-tag{font-size:11px;font-weight:800;margin-top:3px;white-space:nowrap;color:${C.inkSoft};}
+  .rv-row[data-status="in"] .rv-tag{color:${C.greenDeep};}
+  .rv-row[data-status="edge"] .rv-tag{color:${C.amber};}
+  .rv-units{padding:0 10px 8px;}
+  .rv-unit{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 6px;border:none;border-top:1px solid ${C.line};border-radius:0;background:transparent;text-align:left;color:${C.ink};cursor:pointer;}
+  .rv-unit-l{font-size:13px;font-weight:700;} .rv-unit-s{font-size:11px;color:${C.inkSoft};margin-top:2px;font-variant-numeric:tabular-nums;}
+  .rv-unit-r{font-size:13px;font-weight:800;color:${C.greenDeep};white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .rv-unit-tag{font-size:11px;font-weight:700;color:${C.amber};margin-top:2px;}
+  .rv-line{display:flex;align-items:center;gap:8px;margin:2px 2px 10px;opacity:0;transform:translateY(-12px);transition:opacity var(--rv-line) ease,transform var(--rv-line) cubic-bezier(.2,.7,.2,1);will-change:transform;}
+  .rv-line[data-show="true"]{opacity:1;transform:none;}
+  .rv-line-bar{flex:1 1 auto;border-top:2px dashed ${C.greenDeep};opacity:.55;}
+  .rv-line-label{flex:0 0 auto;font-size:12px;font-weight:800;color:${C.greenDeep};white-space:nowrap;}
+  .rv-fold{width:100%;margin-top:4px;padding:13px 15px;display:flex;justify-content:space-between;align-items:center;gap:10px;border:1.5px dashed ${C.lineStrong};border-radius:14px;background:transparent;color:${C.inkSoft};font-size:13px;font-weight:700;cursor:pointer;}
+  .rv-empty{margin:14px 2px 0;font-size:14px;color:${C.inkSoft};line-height:1.5;}
+  .rv-main:focus,.rv-unit:focus,.rv-fold:focus{outline:none;}
+  .rv-main:focus-visible,.rv-unit:focus-visible,.rv-fold:focus-visible{outline:3px solid ${C.greenDeep};outline-offset:2px;}
+  @media (hover:hover){ .rv-fold:hover{background:${C.softer};} .rv-unit:hover{background:rgba(0,0,0,.025);} }
+
   @media (prefers-reduced-motion: reduce){
-    .dot,.slideup,.modal,.sheet-pane{animation:none;}
-    .dot,.acc{transition:none;}
+    .dot,.slideup,.modal,.sheet-pane,.rv-first,.rv-flash{animation:none;}
+    .dot,.acc,.rv-row,.rv-line{transition:none;}
   }
 `;
 
@@ -144,13 +185,19 @@ export function rangeFill(value, min, max) {
   return { width: "100%", background: `linear-gradient(to right, ${C.green} ${pct}%, ${C.track} ${pct}%)` };
 }
 
-export function Slider({ label, value, min, max, step, onChange, display }) {
+/* onCommit(선택) = 손을 놓는 순간(포인터 업·키 업). onChange는 끌고 있는 동안 계속 온다.
+   홈 화면의 첫 리빌처럼 "확정" 순간이 필요한 곳만 넘긴다. 안 넘기면 예전과 같다. */
+export function Slider({ label, value, min, max, step, onChange, display, onCommit }) {
+  const commit = onCommit ? () => onCommit(value) : undefined;
   return <div style={{ marginBottom: 12 }}>
     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
       <span style={{ fontSize: 13, color: C.inkSoft, fontWeight: 600 }}>{label}</span>
       <span style={{ fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{display}</span>
     </div>
-    <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} style={rangeFill(value, min, max)} />
+    <input type="range" min={min} max={max} step={step} value={value} aria-label={label}
+      onChange={(e) => onChange(Number(e.target.value))}
+      onPointerUp={commit} onKeyUp={commit}
+      style={rangeFill(value, min, max)} />
   </div>;
 }
 

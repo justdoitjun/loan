@@ -27,14 +27,18 @@
 
 | 파일 | 역할 |
 |---|---|
-| `src/App.jsx` | 지역(시·구·동)+소득+매물 목록 → 소득 확인(Yes/No) → 정부/은행 팝업. 뒤로 가면 방법 화면 가정(부채·레버)을 비운다. **단계 오케스트레이션 + 사람상태 소유** |
+| `src/App.jsx` | 지역(시·구·동)+소득+현금+단지 목록(`Home.jsx`) → 소득 확인(Yes/No) → 정부/은행 팝업. 매물별 대출(`evaluate`/`judgeUnits`)은 여기서 계산해 홈에 넘긴다. 뒤로 가면 방법 화면 가정(부채·레버)을 비운다. **단계 오케스트레이션 + 사람상태 소유** |
+| `src/Home.jsx` | **홈 화면(예산 리빌).** 카운터 · 연소득/현금 슬라이더 · 단지 목록(아코디언) · 예산선 · 회색 접기 · 첫 리빌/실시간 모션. 계산은 하지 않는다 — App이 넘긴 결과를 `reveal.js`로 접어서 그린다 |
+| `src/reveal.js` | **단지 접기·구간·정렬 순수 함수**(`statusOf`·`groupComplexes`·`splitByBudget`). 한도를 다시 계산하지 않고 `cashNeeded`와 현금만 비교한다. JSX 금지 |
 | `src/person.js` | **사람상태 스키마 + 순수 판단**(EMPTY_PERSON·eligSteps·detailReady·leverOf). JSX 금지 |
 | `src/verdict.js` | **`judgeUnit(매물, 사람)` — 매물별 한도·필요 현금 순수 함수.** 목록 숫자 갱신의 단일 진입점. 답을 끝낸 탭의 상품만 본다(`person.answeredRules`). 방공제는 늘 상품 기본값. **`strategyView(매물, 사람, pickedKey)` — 방법 화면 계산 전부**(자격은 `judgeUnit`과 같은 판정, 소득 가정 상한, 손잡이 여부, 다음 길) |
-| `src/Eligibility.jsx` | **자격 화면 껍데기**(탭·매물카드). 자격을 묻는 유일한 입구. 본문은 탭별로 아래 두 파일 |
-| `src/eligibility/gov.jsx` | **정부대출 자격 질문 + 가능 상품 목록.** 디딤돌·보금자리 판정이 여기 |
-| `src/eligibility/bank.jsx` | **은행대출 탭.** 질문 2개(주택 보유 상태 · 배우자 소득) → 일반 주담대 카드. 은행 질문이 늘면 여기만 고친다 |
-| `src/eligibility/shared.jsx` | 두 탭이 같이 쓰는 질문 조각(YesNo · 배우자 소득 트랙 · 답변 드랍다운). 상품 지식 없음 |
+| `src/Eligibility.jsx` | **자격 화면 = 스텝 컨트롤러.** 자격을 묻는 유일한 입구. 탭 없음. 상단 실시간 요약(열린 대출 N개·최대 X억·남은 질문 수) · 현재 스텝 카드 하나 · 뒤로/다음 · 결과(전 상품 카드). 어느 스텝을 보는지(`cursor`)만 로컬 상태 |
+| `src/eligibility/family.jsx` | 가족정보 카드(본인·배우자·자녀 생년월일 휠). 파생값(나이·미성년·신생아)을 그대로 되돌려 보여준다 |
+| `src/eligibility/questions.jsx` | 스텝 카드 조각(주택 보유 4버킷 · 생애최초 · 혼인 4버킷 · 배우자 소득 트랙 · 통장 · 닫힘 안내 · 입력한 조건 목록). 상품 지식 없음 |
+| `src/eligibility/results.jsx` | 결과 카드(상품 카드 한 종류 — 정부/은행 꼬리표, 한도/금리/실행 3줄, 은행이면 LTV 행과 "무엇이 벽인가" 표) · 0개일 때 가장 근접 · 안 열린 이유 |
 | `src/Strategy.jsx` | **방법 화면.** 부채 입력 → 필요 현금 + 게이지 → 기존 대출을 줄이면 / 소득이 인정되면 / 방 공제 보전(항상 펼침, 기본 아니오) |
+| `src/NextActions.jsx` | **방법 화면 「다음 액션」** — 전략이 선 뒤 고정되는 "이대로 알아보기" 바(`StickyCta`)와, 누르면 뜨는 바텀시트(`NextActionsSheet`: 저장·영업점 예약(서류 목록 + 스타뱅킹 버튼)·부동산 상담·전문가 상담 네 버튼 줄). 문구·주소·서류는 `data.NEXT_ACTIONS` |
+| `src/nextAction.js` | **관심 클릭·저장한 전략의 기록**(localStorage `NEXT_ACTIONS.storageKey`). 순수 함수, JSX 금지. 서버·알림이 생기면 이 파일의 read/write만 바꾼다 |
 | `src/DetailInfo.jsx` | **부채를 종류별로 입력**(`data.DEBT_KINDS`) = 가정의 시작 위치. Strategy 상단 |
 | `src/IncomeCheck.jsx` | **소득 신뢰도 자가진단.** 소득유형 선택 → 체크리스트 → 초록/노랑 논조 |
 | `src/incomeCheck.js` | 자가진단 판정 순수 함수(`visibleChecklist`·`incomeCheckReady`·`incomeCheckResult`). 조건 키는 데이터 그대로 `condition.answer`. JSX 금지 |
@@ -65,8 +69,8 @@
 규칙 데이터에서 이름으로 참조한다. 판정 함수(`judgeRule`/`judgeAll`)는 손대지 않는다.
 `incomeCap`/`priceCap`/`loanCap`은 조건별 티어 배열이고 **위에서부터 첫 매치**가 적용된다(유리한 걸 위로).
 판정은 실패해도 `unmetRequires`·`failedChecks`(무엇이 얼마 초과)를 항상 같이 돌려준다 — 가드레일 4.
-상한 값이 `null`이면 "상한 없음"이고 그 검사는 건너뛴다(은행). `judgeAll(facts, rules)`의 둘째 인자로 탭별 규칙 묶음을 넘긴다
-(정부탭 `GOV_RULES`, 은행탭 `BANK_RULES`, 지도·조종간은 기본값 = 전부).
+상한 값이 `null`이면 "상한 없음"이고 그 검사는 건너뛴다(은행). `judgeAll(facts, rules)`의 둘째 인자는 규칙 묶음이고 기본값은 전부(`PRODUCT_RULES`).
+자격 화면도 전부를 본다. `GOV_RULES`·`BANK_RULES`는 테스트 스크립트용으로만 남아 있다.
 
 **상품 추가 = 규칙 파일 하나 + `products/index.js`에 이어붙이기.** 판정 코드는 안 고친다.
 
@@ -79,8 +83,9 @@
 - **사람상태**(App의 `person` 하나) — `{ ownIncome, elig, detail, pull, incomeCheck }`.
   화면을 오가도 유지된다. **매물을 바꿔도 초기화하지 않는다** — 그게 재질문을 없앤 지점이다.
   보유 현금은 여기 없다. 필요 현금은 시세와 대출에서 그때그때 계산한다(`engine.cashNeededOf`).
-- **화면상태**(App의 개별 useState) — `{ step, unit, kind, pickedKey, modalUnit, place }`.
-  "지금 어디를 보고 있나"만. `place`는 시·구·동.
+  홈 화면의 현금 슬라이더는 **화면상태**(`cash`)다 — 리빌용 가정값이라 사람에 붙이지 않는다.
+- **화면상태**(App의 개별 useState) — `{ step, unit, kind, pickedKey, modalUnit, place, cash }`.
+  "지금 어디를 보고 있나"만. `place`는 시·구·동. `cash`는 홈 화면 전용(다른 화면은 읽지 않는다).
   `pickedKey`(고른 상품)는 방법 화면에서 매물을 바꿔도 **지우지 않는다** — 사람이 고른 것이다.
   새 매물에서 그 상품이 안 열리면 방법 화면이 가장 크게 열리는 길로 대신 보여 주고 그렇다고 말한다(`strategyView.pickedMissing`).
   뒤로 가기와 정부/은행 팝업에서 새로 고를 때만 비운다.
@@ -90,11 +95,12 @@
   매물 전체를 한 번에 돌릴 수 있고 테스트도 된다.
 
 **첫 화면은 지도가 없다.** 소득 슬라이더와 매물 목록이 한 화면이다.
-`personReady(person)`(=정부 **또는** 은행 자격 답변 완료) 전에는 DSR 근사 한도(`engine.evaluate`),
+`personReady(person)`(= 자격 스텝을 끝까지 답함, `person.flowOf(elig).ready`) 전에는 DSR 근사 한도(`engine.evaluate`),
 그 후에는 매물별 정밀 한도(`judgeUnit`). 전환 시 목록의 대출·필요 현금이 바뀌는 게 사건이다.
-정밀 숫자는 **답을 끝낸 탭의 상품만** 쓴다(`person.answeredRules`). 은행만 답했으면 은행 상품만, 정부를 끝까지 답했으면 정부 상품에 은행을 더한다.
-은행 답(합산 여부)은 은행탭에서 고른 값이 먼저고, 없으면 **정부탭이 다 찼을 때만** 정부 답을 빌린다(`person.bankJointOf`) —
-정부 질문 도중의 가족정보만으로 정밀 모드가 켜지면 안 된다.
+자격은 한 흐름이라 정밀 숫자는 **전 상품** 중 가장 크게 열리는 길이다(`person.answeredRules` = 끝났으면 `PRODUCT_RULES`, 아니면 빈 배열).
+유지 1주택·2주택 이상으로 닫힌 사람은 끝까지 답해도 `ready`가 아니다(목록은 대략 모드에 남는다).
+은행 DSR의 배우자 합산은 묻지 않는다 — 가족정보의 배우자 있음 = 합산(`person.bankJointOf`, 엔진 `borrowerSpouseIncomeOf`).
+질문 도중(부분 입력)에는 정밀 모드가 켜지지 않는다. 다만 자격 화면 상단 요약은 부분 입력 그대로 `judgeAll`을 돌려 보여준다.
 
 ## 파일별 경계
 

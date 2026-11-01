@@ -208,6 +208,21 @@ export function realDemandHeadGap(s = {}) {
 /* 필요 현금 = 시세에서 대출을 뺀 나머지. 대출이 시세를 넘으면 0 — 현금은 입력이 아니라 이 결과다. */
 export const cashNeededOf = (price, loan) => Math.max(num(price) - Math.max(num(loan), 0), 0);
 
+/* 홈 예산선 — 지금 현금으로 닿는 최대 시세(만원). cashNeededOf(p, loanAt(p)) <= cash 인 가장 큰 p를 이분탐색한다.
+   loanAt(price) = 그 시세에서의 대출(자격 전 evaluate · 자격 후 judgeUnit). 자격 전 산식은 단조라 정확하고,
+   자격 후는 상품 가격상한(디딤돌 5~6억)에서 한도가 뚝 떨어져 단조가 아닐 수 있다 — 그래서 '약'으로만 쓴다(근사).
+   1만원 단위. 화면은 억 단위로 반올림해 보여준다. */
+export function affordablePrice(cash, loanAt, hi = 500000) {
+  const c = num(cash);
+  if (c <= 0) return 0;
+  let lo = 0, up = hi;
+  for (let i = 0; i < 24 && up - lo > 1; i++) {
+    const mid = Math.floor((lo + up) / 2);
+    if (cashNeededOf(mid, loanAt(mid)) <= c) lo = mid; else up = mid;
+  }
+  return lo;
+}
+
 /* 소득 화면의 대략 한도. 부채 0을 가정한 '천장' 기준이다.
    색을 돌리지 않는다 — 결과는 대출과 필요 현금 두 숫자. */
 export function evaluate(unit, dsrCap) {

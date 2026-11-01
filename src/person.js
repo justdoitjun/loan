@@ -10,14 +10,14 @@
    그래야 매물 전체를 동시에 다시 계산할 수 있고, 다른 매물을 골라도 재질문이 없다.
 
    소유: App.jsx가 useState로 EMPTY_PERSON 하나를 들고 있다. 각 화면은 자기 조각만 받아 쓴다.
-     Eligibility  → elig       (자격 답변)
+     Eligibility  → elig       (자격 답변 — 스텝 정의는 아래 FLOW)
      DetailInfo   → detail     (부채 잔액 · 소득의 질)
      Strategy     → pull       (레버를 당긴 값) ⚠️ 로컬 state 아님 — 화면을 나가도 유지된다
      IncomeCheck  → incomeCheck(소득 신뢰도 자가진단)
      소득 화면     → ownIncome */
 import { LEVER, DEBT_KINDS } from "./data.js";
-import { ageOf, spouseIncomeOf, borrowerSpouseIncomeOf, debtTotal, buildCtx, deriveFacts } from "./engine.js";
-import { GOV_RULES, BANK_RULES } from "./products/index.js";
+import { ageOf, spouseIncomeOf, borrowerSpouseIncomeOf, spouseCounted, debtTotal, buildCtx, deriveFacts } from "./engine.js";
+import { PRODUCT_RULES } from "./products/index.js";
 
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
@@ -45,7 +45,7 @@ export const EMPTY_ELIG = {
   /* ── 소득 ── */
   spouseBand: null,       // SPOUSE_INCOME_BANDS의 key (합산할 배우자가 있을 때만)
   spouseIncomeRaw: "",    // 소득상한 경계일 때만 받는 정밀값(만원)
-  bankIncomeJoint: null,  // 은행탭 "배우자 소득 합산"(true) / "본인 소득만"(false). 은행 DSR(차주단위)에만 쓴다
+  bankIncomeJoint: null,  // 은행 DSR 합산 여부. 화면은 묻지 않는다(배우자 있음 = 합산, person.bankJointOf). 값이 있으면 그게 우선
 
   /* ── 그 외 ── */
   hasDreamAccount: null,  // 청년 주택드림 통장 (만39세 이하에게만 묻는다)
@@ -63,84 +63,64 @@ export const bucketOf = (elig) => {
   return null;
 };
 
-/* ── 질문 진행 상태 ──
-   지도가 "정밀 한도 모드로 갈 수 있나"를 판단하려면 자격 답변이 다 찼는지를 알아야 하는데,
-   그 판단이 컴포넌트 안에만 있으면 App이 같은 조건을 또 쓰게 된다(= 두 벌이 되고 반드시 어긋난다).
-   elig 하나만 보고 결정된다 — 매물·소득과 무관하다. */
-export function eligSteps(elig) {
-  const gateOpen = elig.homeCount === 0;
+/* ── 자격 흐름: 스텝 정의를 데이터로 ──
+   정부/은행 탭은 없다. 자격은 한 번만 받는다(ux.md 3단계). 한 화면에 스텝 하나.
+   when(elig) = 이 스텝을 묻는가(답에 따라 건너뜀) · done(elig) = 답했는가.
+   화면(Eligibility.jsx)은 key로 카드를 고를 뿐 순서·건너뛰기 지식이 없다. 스텝을 늘리면 여기 한 줄 + 카드 하나.
+   ⚠️ elig만 보고 결정된다 — 매물·소득과 무관하다. */
+export const familyReady = (e) =>
+  filledAge(e.ownBirthday) !== null && e.hasSpouse !== null && e.birthdays.every((d) => filledAge(d) !== null);
+const under39 = (e) => { const a = filledAge(e.ownBirthday); return a !== null && a <= 39; };
+/* 어느 상품이든 열릴 수 있는 주택 상태 = 무주택 또는 처분조건부 1주택. 유지·다주택은 전부 닫힌다(규제지역 LTV 0%). */
+const openAtAll = (e) => { const b = homeBucketOf(e); return b === "none" || b === "dispose"; };
+/* 주택 보유까지 답한 뒤에만 뒤 스텝이 생긴다 — 앞을 비워 둔 채 뒤 스텝이 세어지면 "앞으로 N개"가 거짓이 된다. */
+const afterHome = (e) => familyReady(e) && homeBucketOf(e) !== null;
+const noHomeAfter = (e) => afterHome(e) && homeBucketOf(e) === "none";
 
-  /* 배우자는 두 갈래로 본다. 하나로 합치면 결혼예정자의 소득이 통째로 0이 된다.
-       spouseDeclared = 가족정보 카드에서 직접 "있다"고 답한 것 → 버킷 모순 차단에만 쓴다.
-       spouseCounted  = 소득을 합산할 상대가 있는가 → 결혼예정이면 예비배우자가 있다고 간주한다.
-     engine.spouseIncomeOf는 marital !== "single"이면 배우자 소득을 합산한다(결혼예정 포함).
-     그런데 화면이 "배우자 없음"만 보고 소득 질문을 건너뛰면 그 합산분이 0으로 들어가서,
-     부부합산소득이 실제보다 낮게 잡히고 소득상한을 잘못 통과한다 — 없는 초록을 만든다. */
-  const spouseDeclared = elig.hasSpouse === true;
-  const spouseCounted = spouseDeclared || elig.marital === "planned";
+export const FLOW = [
+  { key: "family",    when: () => true,                                        done: familyReady },
+  /* 가족·주택 두 스텝은 처음부터 보인다("앞으로 2개만 더"). 그 뒤는 주택 답에 따라 생긴다 */
+  { key: "home",      when: () => true,                                        done: (e) => homeBucketOf(e) !== null },
+  /* 처분조건부는 은행만 열리고 은행은 생애최초·혼인·통장을 읽지 않는다 → 무주택에게만 묻는다 */
+  { key: "firstTime", when: noHomeAfter,                                       done: (e) => e.firstTime !== null },
+  { key: "marital",   when: noHomeAfter,                                       done: (e) => bucketOf(e) !== null },
+  /* 합산할 상대(배우자 또는 예비배우자)가 있을 때만. 은행 DSR도 같은 답을 쓴다(배우자 있음 = 합산) */
+  { key: "income",    when: (e) => afterHome(e) && openAtAll(e) && spouseCounted(e), done: (e) => e.spouseBand !== null },
+  { key: "dream",     when: (e) => noHomeAfter(e) && under39(e),               done: (e) => e.hasDreamAccount !== null },
+];
 
-  // 1) 가족정보: 배우자 생년월일은 판정에 안 쓰므로 진행을 막지 않는다 — 비워도 다음으로 간다.
-  const childrenFilled = elig.birthdays.every((d) => filledAge(d) !== null);
-  const familyReady = filledAge(elig.ownBirthday) !== null && elig.hasSpouse !== null && childrenFilled;
-  // 2) 무주택 게이트 → 3) 생애최초 → 4) 결혼여부
-  const askFirstTime = familyReady && gateOpen;
-  const askMarital = askFirstTime && elig.firstTime !== null;
-  const maritalReady = bucketOf(elig) !== null;
-  // 5) 소득 — 합산할 상대가 없을 때만 건너뛴다
-  const askIncome = askMarital && maritalReady;
-  const incomeReady = !spouseCounted || elig.spouseBand !== null;
-  /* 6) 청년 주택드림 — 만39세 이하에게만 묻는다(40대에겐 어차피 안 열리는 대출).
-        facts.under39와 같은 판단이지만 여기선 elig만 보고 낸다 — ctx(매물 필요)를 안 쓰기 위해서다. */
-  const age = filledAge(elig.ownBirthday);
-  const needsDream = age !== null && age <= 39;
-  const dreamReady = !needsDream || elig.hasDreamAccount !== null;
-
-  return {
-    gateOpen, spouseDeclared, spouseCounted, familyReady, askFirstTime, askMarital,
-    askIncome, incomeReady, needsDream, dreamReady,
-    ready: askIncome && incomeReady && dreamReady,
-  };
+/* 지금 답으로 본 흐름. steps = 보이는 스텝(순서대로) · firstOpen = 첫 미완 index(-1이면 다 답함) ·
+   remaining = 남은 질문 수(화면의 "앞으로 N개만 더") · closed = 유지·다주택으로 전부 닫힘 ·
+   ready = 다 답했고 닫히지 않음(= 목록 정밀 모드를 켜도 되는가). 닫힘은 완료가 아니다. */
+export function flowOf(elig) {
+  const steps = FLOW.filter((s) => s.when(elig));
+  const firstOpen = steps.findIndex((s) => !s.done(elig));
+  const remaining = steps.filter((s) => !s.done(elig)).length;
+  const bucket = homeBucketOf(elig);
+  const closed = bucket === "keep" || bucket === "multi";
+  return { steps, firstOpen, remaining, closed, bucket, open: openAtAll(elig), ready: firstOpen === -1 && !closed };
 }
 
 /* 자격 답변이 다 찼는가 = 이 사람에 대해 상품 판정을 돌릴 수 있는가. */
-export const eligReady = (elig) => eligSteps(elig).ready;
+export const eligReady = (elig) => flowOf(elig).ready;
+/* 은행도 같은 흐름이다. 이름은 호환용. */
+export const bankReady = eligReady;
 
-/* ── 은행탭 진행 상태 (products/bank/bank.md 1절) ──
-   ① 주택 보유 상태 → ② 무주택이면 생애최초(LTV 40%↔70%) → ③ 배우자 소득(DSR 합산).
-   정부탭과 같은 elig 필드를 쓴다. 한쪽에서 답한 무주택·생애최초·소득 밴드는 다른 쪽에서 다시 묻지 않는다.
-   세대주는 여기서 묻지 않는다. 가족정보가 있을 때만 서민·실수요 행을 준다. */
+/* 주택 보유 4버킷(products/bank/bank.md 1절) — LTV 표의 행. */
 export const homeBucketOf = (elig) => {
   if (elig.homeCount === 0) return "none";
   if (elig.homeCount === 1) return elig.disposeExisting === true ? "dispose" : elig.disposeExisting === false ? "keep" : null;
   if (elig.homeCount >= 2) return "multi";
   return null;
 };
-/* 은행 소득 합산 여부. 은행탭에서 고른 값이 먼저다.
-   안 골랐으면 정부탭 답이 '다 찼을 때만' 빌린다(배우자 있음 = 합산) — 정부 질문 도중의 가족정보만으로
-   은행 답을 채우면, 결혼·소득을 묻기도 전에 목록이 정밀 숫자로 바뀐다(test/claude N-04).
-   null = 아직 모른다. */
+/* 은행 소득 합산 여부. 따로 묻지 않는다 — 가족정보의 배우자 있음 = 합산(bank.md 1절).
+   bankIncomeJoint는 스키마에 남아 있고 값이 있으면 그게 우선이다(화면은 채우지 않는다). null = 아직 모른다. */
 export function bankJointOf(elig) {
   if (elig.bankIncomeJoint != null) return elig.bankIncomeJoint;
   return eligReady(elig) ? elig.hasSpouse === true : null;
 }
 
-export function bankSteps(elig) {
-  const bucket = homeBucketOf(elig);
-  const homeReady = bucket !== null;
-  const open = bucket === "none" || bucket === "dispose";          // 그 외는 LTV 0% → 닫힘
-  const askFirstTime = homeReady && bucket === "none";
-  const firstTimeReady = !askFirstTime || elig.firstTime !== null;
-  const askIncome = homeReady && open && firstTimeReady;
-  /* 합산 → 밴드까지 있어야 소득이 정해진다. 본인 소득만 → 바로 된다. */
-  const joint = bankJointOf(elig);
-  const spouseReady = joint === false || (joint === true && elig.spouseBand !== null);
-  return { bucket, homeReady, open, askFirstTime, firstTimeReady, askIncome, joint, spouseReady, ready: askIncome && spouseReady };
-}
-export const bankReady = (elig) => bankSteps(elig).ready;
-
-/* 가족정보의 배우자 유무 토글(정부탭) — 뒤 질문들과 모순이 남지 않게 어긋난 답만 조용히 비운다.
-   ⚠️ 은행탭의 '합산 / 본인 소득만'은 이 함수가 아니라 withBankJoint다. 기혼자가 본인 소득으로만
-      DSR을 보는 건 정상적인 선택이라, 그걸 '배우자 없음'으로 읽으면 정부탭 결혼 답이 지워진다. */
+/* 가족정보의 배우자 유무 토글 — 뒤 스텝들과 모순이 남지 않게 어긋난 답만 조용히 비운다. */
 export function withSpouse(s, v) {
   const next = { ...s, hasSpouse: v };
   if (v === false) {
@@ -148,17 +128,8 @@ export function withSpouse(s, v) {
     /* 결혼예정은 '배우자 없음'과 모순이 아니다(예비배우자) → 그 소득은 계속 합산 대상이라 안 지운다 */
     if (s.marital !== "planned") { next.spouseBand = null; next.spouseIncomeRaw = ""; }
     if (s.marital === "married") { next.marital = null; next.marriedWithin7 = null; }
-    /* 배우자가 없으면 은행 합산은 성립하지 않는다. 이미 합산을 골랐으면 본인 소득만으로 바꾼다. */
-    if (s.bankIncomeJoint === true) next.bankIncomeJoint = false;
   } else if (s.marital === "single") { next.marital = null; next.marriedWithin7 = null; }
   return next;
-}
-
-/* 은행탭 소득 합산 토글. 정부탭 답(배우자 유무·결혼·밴드)은 건드리지 않는다.
-   합산을 고르면 배우자가 있다는 뜻이므로, 가족정보가 비어 있거나 다르면 '배우자 있음'으로 맞춘다. */
-export function withBankJoint(s, v) {
-  const base = v === true && s.hasSpouse !== true ? withSpouse(s, true) : s;
-  return { ...base, bankIncomeJoint: v };
 }
 
 /* 주택 수 답. 수가 바뀌면 처분조건부 답을 비운다 — 예전에 고른 처분 약정이
@@ -222,16 +193,12 @@ export const EMPTY_PERSON = {
 };
 
 /* 이 사람에 대해 상품 자격 판정을 돌릴 수 있는가 = 매물별 한도를 정밀 계산해도 되는가.
-   정부 또는 은행, 어느 한쪽 답변이 차면 켠다 — 숫자는 채널을 가리지 않고 "가장 크게 열리는 길"로 본다.
+   자격 스텝을 끝까지 답하면 켠다 — 숫자는 채널을 가리지 않고 "가장 크게 열리는 길"로 본다.
    부채·레버는 조건이 아니다 — 안 받았으면 무부채로 가정하고 계산한다(기존 '천장' 잣대와 같다). */
-export const personReady = (person) => eligReady(person.elig) || bankReady(person.elig);
+export const personReady = (person) => eligReady(person.elig);
 
-/* 정밀 숫자에 쓰는 상품 = 답을 끝낸 탭의 상품만. 은행만 답했는데 정부 상품(보금자리) 숫자로
-   목록이 뛰면 안 된다(test/claude F-02). 어느 쪽도 안 끝났으면 빈 배열. */
-export const answeredRules = (elig) => [
-  ...(eligReady(elig) ? GOV_RULES : []),
-  ...(bankReady(elig) ? BANK_RULES : []),
-];
+/* 정밀 숫자에 쓰는 상품 = 한 흐름을 다 답했으면 전부, 아니면 빈 배열(부분 입력으로 목록이 뛰면 안 된다). */
+export const answeredRules = (elig) => (eligReady(elig) ? PRODUCT_RULES : []);
 
 /* 부부합산 소득 (만원). 본인(소득 화면) + 배우자(자격 화면 밴드). */
 export const totalIncomeOf = (person) => person.ownIncome + spouseIncomeOf(person.elig);
