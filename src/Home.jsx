@@ -135,7 +135,7 @@ export default function Home({ header, dong, income, setIncome, incomeMax, cash,
   return (
     <div style={vars}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <div style={eyebrow}>내집마련</div>
+        <div style={eyebrow}>가심사</div>
         {header}
       </div>
 
